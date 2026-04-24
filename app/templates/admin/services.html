@@ -1,0 +1,291 @@
+{% extends "base.html" %}
+{% block title %}Serviços — Admin — Cabeleleila Leila{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="mb-4 d-flex justify-content-between align-items-start">
+        <div>
+            <a href="/admin/dashboard" class="btn btn-sm btn-outline-light mb-3">
+                <i class="bi bi-arrow-left me-1"></i>Dashboard
+            </a>
+            <h1 class="h2 fw-bold gradient-text">Gerenciar Serviços</h1>
+        </div>
+        <button class="btn btn-primary-gradient" onclick="openNewService()">
+            <i class="bi bi-plus-circle me-2"></i>Novo Serviço
+        </button>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card card-glass mb-4">
+        <div class="card-body py-3">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-5">
+                    <label class="form-label small text-muted mb-1">Buscar serviço</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-transparent border-secondary text-muted">
+                            <i class="bi bi-search"></i>
+                        </span>
+                        <input type="text" class="form-control input-glass" id="searchService"
+                               placeholder="Nome ou descrição..." oninput="debounceSearch()">
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small text-muted mb-1">Status</label>
+                    <select class="form-select form-select-sm input-glass" id="filterActive" onchange="resetAndLoad()">
+                        <option value="false">Todos</option>
+                        <option value="true">Apenas ativos</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button class="btn btn-sm btn-outline-light w-100" onclick="clearFilters()">
+                        <i class="bi bi-x-lg me-1"></i>Limpar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card card-glass">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-dark table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Nome</th>
+                            <th>Descrição</th>
+                            <th>Duração</th>
+                            <th>Preço</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="servicesList">
+                        <tr><td colspan="7" class="text-center py-4"><div class="spinner-border spinner-border-sm"></div></td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Paginação -->
+    <div id="servicesPagination" class="d-flex justify-content-between align-items-center mt-3" style="display: none !important;"></div>
+</div>
+
+<!-- Modal Serviço -->
+<div class="modal fade" id="serviceModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content bg-dark border-secondary">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title gradient-text" id="serviceModalTitle">Novo Serviço</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="serviceId">
+                <div class="mb-3">
+                    <label class="form-label">Nome</label>
+                    <input type="text" class="form-control input-glass" id="serviceName" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Descrição</label>
+                    <textarea class="form-control input-glass" id="serviceDesc" rows="2"></textarea>
+                </div>
+                <div class="row g-3">
+                    <div class="col-6">
+                        <label class="form-label">Duração (min)</label>
+                        <input type="number" class="form-control input-glass" id="serviceDuration" min="1" required>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label">Preço (R$)</label>
+                        <input type="number" class="form-control input-glass" id="servicePrice" min="0" step="0.01" required>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-secondary">
+                <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary-gradient" onclick="saveService()">Salvar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let editingService = false;
+let svcPage = 0;
+const SVC_PAGE_SIZE = 10;
+let searchTimer = null;
+
+document.addEventListener('DOMContentLoaded', () => {
+    requireAuth('ADMIN');
+    loadServices();
+});
+
+function debounceSearch() {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+        svcPage = 0;
+        loadServices();
+    }, 300);
+}
+
+function resetAndLoad() {
+    svcPage = 0;
+    loadServices();
+}
+
+function clearFilters() {
+    document.getElementById('searchService').value = '';
+    document.getElementById('filterActive').value = 'false';
+    svcPage = 0;
+    loadServices();
+}
+
+function svcGoToPage(page) {
+    svcPage = page;
+    loadServices();
+}
+
+async function loadServices() {
+    const tbody = document.getElementById('servicesList');
+    const pagContainer = document.getElementById('servicesPagination');
+    try {
+        const skip = svcPage * SVC_PAGE_SIZE;
+        const search = document.getElementById('searchService').value.trim();
+        const onlyActive = document.getElementById('filterActive').value;
+
+        let url = `/api/services?only_active=${onlyActive}&limit=${SVC_PAGE_SIZE}&skip=${skip}`;
+        if (search) url += `&search=${encodeURIComponent(search)}`;
+
+        const response = await apiGet(url);
+
+        // Handle both paginated (object) and simple (array) response formats
+        let services, total;
+        if (Array.isArray(response)) {
+            services = response;
+            total = response.length;
+        } else {
+            services = response.items || [];
+            total = response.total || 0;
+        }
+
+        const totalPages = Math.ceil(total / SVC_PAGE_SIZE);
+
+        if (services.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">Nenhum serviço encontrado</td></tr>';
+            pagContainer.style.display = 'none';
+            return;
+        }
+
+        tbody.innerHTML = services.map(s => `
+            <tr class="${!s.ativo ? 'opacity-50' : ''}">
+                <td><span class="badge bg-dark">#${s.id}</span></td>
+                <td class="fw-semibold">${s.nome}</td>
+                <td><small class="text-muted">${s.descricao || '—'}</small></td>
+                <td><span class="badge bg-info-subtle text-info">${s.duracao_minutos} min</span></td>
+                <td class="fw-bold text-success">R$ ${s.preco.toFixed(2)}</td>
+                <td>${s.ativo ? '<span class="badge bg-success-subtle text-success">Ativo</span>' : '<span class="badge bg-danger-subtle text-danger">Inativo</span>'}</td>
+                <td>
+                    <button class="btn btn-sm btn-outline-light me-1" onclick="openEditService(${JSON.stringify(s).replace(/"/g, '&quot;')})">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                    <button class="btn btn-sm ${s.ativo ? 'btn-outline-danger' : 'btn-outline-success'}"
+                            onclick="toggleServiceStatus(${s.id}, ${!s.ativo})">
+                        <i class="bi bi-${s.ativo ? 'x-circle' : 'check-circle'}"></i>
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+
+        // Paginação
+        if (totalPages > 1) {
+            pagContainer.style.display = 'flex';
+            const startItem = skip + 1;
+            const endItem = Math.min(skip + SVC_PAGE_SIZE, total);
+
+            let pagesHtml = '';
+            for (let p = 0; p < totalPages; p++) {
+                const activeClass = p === svcPage ? 'btn-primary' : 'btn-outline-light';
+                pagesHtml += `<button class="btn btn-sm ${activeClass}" onclick="svcGoToPage(${p})">${p + 1}</button>`;
+            }
+
+            pagContainer.innerHTML = `
+                <span class="text-muted small">Mostrando ${startItem}–${endItem} de ${total}</span>
+                <div class="d-flex gap-1">
+                    <button class="btn btn-sm btn-outline-light" onclick="svcGoToPage(${svcPage - 1})" ${svcPage === 0 ? 'disabled' : ''}>
+                        <i class="bi bi-chevron-left"></i>
+                    </button>
+                    ${pagesHtml}
+                    <button class="btn btn-sm btn-outline-light" onclick="svcGoToPage(${svcPage + 1})" ${svcPage >= totalPages - 1 ? 'disabled' : ''}>
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
+                </div>
+            `;
+        } else {
+            pagContainer.style.display = total > 0 ? 'flex' : 'none';
+            pagContainer.innerHTML = total > 0 ? `<span class="text-muted small">Mostrando ${total} resultado(s)</span><div></div>` : '';
+        }
+
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="7" class="text-danger text-center">${err.message}</td></tr>`;
+    }
+}
+
+function openNewService() {
+    editingService = false;
+    document.getElementById('serviceModalTitle').textContent = 'Novo Serviço';
+    document.getElementById('serviceId').value = '';
+    document.getElementById('serviceName').value = '';
+    document.getElementById('serviceDesc').value = '';
+    document.getElementById('serviceDuration').value = '';
+    document.getElementById('servicePrice').value = '';
+    new bootstrap.Modal(document.getElementById('serviceModal')).show();
+}
+
+function openEditService(s) {
+    editingService = true;
+    document.getElementById('serviceModalTitle').textContent = 'Editar Serviço';
+    document.getElementById('serviceId').value = s.id;
+    document.getElementById('serviceName').value = s.nome;
+    document.getElementById('serviceDesc').value = s.descricao || '';
+    document.getElementById('serviceDuration').value = s.duracao_minutos;
+    document.getElementById('servicePrice').value = s.preco;
+    new bootstrap.Modal(document.getElementById('serviceModal')).show();
+}
+
+async function saveService() {
+    const data = {
+        nome: document.getElementById('serviceName').value,
+        descricao: document.getElementById('serviceDesc').value,
+        duracao_minutos: parseInt(document.getElementById('serviceDuration').value),
+        preco: parseFloat(document.getElementById('servicePrice').value)
+    };
+
+    try {
+        if (editingService) {
+            const id = document.getElementById('serviceId').value;
+            await apiPut(`/api/services/${id}`, data);
+            showToast('Serviço atualizado!', 'success');
+        } else {
+            await apiPost('/api/services', data);
+            showToast('Serviço criado!', 'success');
+        }
+        bootstrap.Modal.getInstance(document.getElementById('serviceModal')).hide();
+        loadServices();
+    } catch (err) {
+        showToast(err.message, 'danger');
+    }
+}
+
+async function toggleServiceStatus(id, newStatus) {
+    try {
+        await apiPut(`/api/services/${id}`, { ativo: newStatus });
+        showToast(`Serviço ${newStatus ? 'ativado' : 'desativado'}!`, 'success');
+        loadServices();
+    } catch (err) {
+        showToast(err.message, 'danger');
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+{% block title %}Calendário — Admin — Cabeleleila Leila{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Ajustes para o calendário combinar com o tema dark/glass */
+    #calendar {
+        background: rgba(0, 0, 0, 0.2);
+        padding: 20px;
+        border-radius: 12px;
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        min-height: 600px;
+    }
+    
+    .fc-theme-standard td, .fc-theme-standard th, .fc-theme-standard .fc-scrollgrid {
+        border-color: rgba(255, 255, 255, 0.1);
+    }
+    
+    .fc-col-header-cell {
+        background: rgba(255, 255, 255, 0.05);
+        padding: 10px 0;
+    }
+    
+    .fc-day-today {
+        background: rgba(255, 255, 255, 0.05) !important;
+    }
+    
+    .fc .fc-button-primary {
+        background-color: var(--bs-primary);
+        border-color: var(--bs-primary);
+    }
+    
+    .fc .fc-button-primary:not(:disabled):active, .fc .fc-button-primary:not(:disabled).fc-button-active {
+        background-color: var(--bs-primary-dark, #0d6efd);
+        border-color: var(--bs-primary-dark, #0d6efd);
+    }
+    
+    .fc-event {
+        cursor: pointer;
+        border-radius: 4px;
+        border: none;
+        padding: 2px 4px;
+        margin-bottom: 2px;
+    }
+    
+    .fc-timegrid-slot {
+        height: 30px !important;
+    }
+    
+    .fc-v-event {
+        background-color: transparent;
+        border: none;
+    }
+    
+    .fc-event-main {
+        padding: 2px 4px;
+        font-size: 0.85em;
+        line-height: 1.2;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="mb-4">
+        <a href="/admin/dashboard" class="btn btn-sm btn-outline-light mb-3">
+            <i class="bi bi-arrow-left me-1"></i>Dashboard
+        </a>
+        <h1 class="h2 fw-bold gradient-text">Calendário de Agendamentos</h1>
+        <p class="text-muted">Visualize a sua agenda diária e semanal de forma simples e intuitiva.</p>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            <div id="calendar" class="animate-fade-in"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Evento Detalhes -->
+<div class="modal fade" id="eventModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content modal-glass">
+            <div class="modal-header border-bottom border-secondary">
+                <h5 class="modal-title gradient-text" id="eventModalTitle">Detalhes do Agendamento</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="eventModalBody">
+                <!-- Preenchido via JS -->
+            </div>
+            <div class="modal-footer border-top border-secondary">
+                <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Fechar</button>
+                <a href="/admin/appointments" class="btn btn-primary-gradient">Gerenciar Status</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@fullcalendar/core@6.1.15/locales/pt-br.global.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+    requireAuth('ADMIN');
+    
+    const calendarEl = document.getElementById('calendar');
+    
+    // Status color mapping
+    const colorMap = {
+        PENDING: '#ffc107',    // Warning
+        APPROVED: '#198754',   // Success
+        REJECTED: '#dc3545',   // Danger
+        CANCELLED: '#6c757d',  // Secondary
+        COMPLETED: '#0dcaf0'   // Info
+    };
+    
+    // Fetch appointments
+    let events = [];
+    try {
+        const data = await apiGet('/api/appointments?limit=1000');
+        
+        events = data.items.map(app => {
+            // Calcular tempo de término baseado nos serviços
+            let totalMinutes = 0;
+            app.services.forEach(s => {
+                if(s.service && s.service.duracao_minutos) {
+                    totalMinutes += s.service.duracao_minutos;
+                }
+            });
+            
+            const startDate = new Date(app.data_hora);
+            const endDate = new Date(startDate.getTime() + totalMinutes * 60000);
+            
+            const servicesText = app.services.map(s => s.service ? s.service.nome : 'Serviço').join(', ');
+            
+            return {
+                id: app.id,
+                title: `${app.client_nome.split(' ')[0]} - ${servicesText}`,
+                start: startDate.toISOString(),
+                end: endDate.toISOString(),
+                backgroundColor: colorMap[app.status] || colorMap.PENDING,
+                extendedProps: {
+                    client: app.client_nome,
+                    services: servicesText,
+                    status: app.status,
+                    createdAt: app.criado_em,
+                    duration: totalMinutes
+                }
+            };
+        });
+    } catch (err) {
+        showToast('Erro ao carregar os agendamentos para o calendário.', 'danger');
+    }
+    
+    // Inicializar o FullCalendar
+    const calendar = new FullCalendar.Calendar(calendarEl, {
+        initialView: 'timeGridWeek', // Visão padrão
+        locale: 'pt-br',
+        headerToolbar: {
+            left: 'prev,next today',
+            center: 'title',
+            right: 'dayGridMonth,timeGridWeek,timeGridDay,listWeek'
+        },
+        slotMinTime: '07:00:00', // Começa às 7h
+        slotMaxTime: '20:00:00', // Termina às 20h
+        allDaySlot: false,       // Esconde a linha de "Dia inteiro"
+        events: events,
+        nowIndicator: true,
+        eventClick: function(info) {
+            const ev = info.event;
+            const props = ev.extendedProps;
+            
+            const modalTitle = document.getElementById('eventModalTitle');
+            const modalBody = document.getElementById('eventModalBody');
+            
+            modalTitle.textContent = `Agendamento #${ev.id}`;
+            modalBody.innerHTML = `
+                <p><strong>Cliente:</strong> ${props.client}</p>
+                <p><strong>Data/Hora:</strong> ${ev.start.toLocaleString('pt-BR')}</p>
+                <p><strong>Duração:</strong> ${props.duration} min</p>
+                <p><strong>Serviços:</strong> ${props.services}</p>
+                <p><strong>Status:</strong> ${statusBadge(props.status)}</p>
+            `;
+            
+            const modal = new bootstrap.Modal(document.getElementById('eventModal'));
+            modal.show();
+        }
+    });
+    
+    calendar.render();
+});
+</script>
+{% endblock %}

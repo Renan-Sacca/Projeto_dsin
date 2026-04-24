@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-bs-theme="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Cabeleleila Leila - Sistema de Agendamento do Salão">
+    <title>{% block title %}Cabeleleila Leila{% endblock %}</title>
+
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <!-- Google Fonts -->
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@700&display=swap"
+        rel="stylesheet">
+    <!-- Choices.js CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css" />
+    <!-- Custom CSS -->
+    <link href="/static/css/style.css" rel="stylesheet">
+    {% block extra_css %}{% endblock %}
+</head>
+
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-glass fixed-top" id="mainNavbar">
+        <div class="container">
+            <a class="navbar-brand brand-text" href="/">
+                <i class="bi bi-scissors me-2"></i>Cabeleleila Leila
+            </a>
+            <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse"
+                data-bs-target="#navContent">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navContent">
+                <!-- Menu dinâmico via JS -->
+                <ul class="navbar-nav ms-auto" id="navMenu"></ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Toast Container -->
+    <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 9999;" id="toastContainer"></div>
+
+    <!-- Generic Confirm Modal -->
+    <div class="modal fade" id="confirmModal" tabindex="-1" aria-labelledby="confirmModalLabel" aria-hidden="true"
+        style="z-index: 1055;">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content card-glass border-white border-opacity-10">
+                <div class="modal-header border-bottom border-white border-opacity-10">
+                    <h5 class="modal-title fw-semibold" id="confirmModalLabel">Confirmação</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                        aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="confirmModalMessage">
+                    Tem certeza que gostaria de fazer essa ação?
+                </div>
+                <div class="modal-footer border-top border-white border-opacity-10">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="confirmModalBtn">Confirmar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chatbot Wrapper (Global) -->
+    <div id="chatbot-wrapper" style="display: none;">
+        <div id="chatbot-container" class="position-fixed bottom-0 end-0 p-3"
+            style="z-index: 1050; display: none; width: 350px;">
+            <div class="card card-glass shadow-lg border border-white border-opacity-10 d-flex flex-column h-100"
+                style="max-height: 500px; border-radius: 1rem; overflow: hidden;">
+                <div
+                    class="card-header bg-primary-gradient text-white d-flex justify-content-between align-items-center p-3 border-0">
+                    <div class="d-flex align-items-center">
+                        <div class="bg-white rounded-circle d-flex align-items-center justify-content-center me-2 text-primary"
+                            style="width: 32px; height: 32px;">
+                            <i class="bi bi-robot"></i>
+                        </div>
+                        <h6 class="mb-0 fw-bold">LeilaBot</h6>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white" aria-label="Close"
+                        onclick="toggleChatbot()"></button>
+                </div>
+
+                <div id="chatbot-messages"
+                    class="card-body bg-dark bg-opacity-50 overflow-auto d-flex flex-column gap-3 p-3"
+                    style="height: 350px;">
+                    <!-- Mensagens aparecerão aqui -->
+                </div>
+
+                <div id="chatbot-input-area"
+                    class="card-footer bg-transparent border-top border-white border-opacity-10 p-2">
+                    <!-- Inputs ou botões de escolha aparecerão aqui -->
+                </div>
+            </div>
+        </div>
+
+        <button id="chatbot-toggle-btn"
+            class="btn btn-primary-gradient position-fixed rounded-circle shadow-lg d-flex align-items-center justify-content-center"
+            style="bottom: 20px; right: 20px; width: 60px; height: 60px; z-index: 1040;" onclick="toggleChatbot()">
+            <i class="bi bi-chat-dots-fill fs-3"></i>
+        </button>
+    </div>
+
+    <style>
+        .chat-msg-bot {
+            align-self: flex-start;
+            background-color: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            border-radius: 15px 15px 15px 0;
+            padding: 10px 15px;
+            max-width: 85%;
+            word-break: break-word;
+            font-size: 0.9rem;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        }
+
+        .chat-msg-user {
+            align-self: flex-end;
+            background: linear-gradient(135deg, #FF6B6B 0%, #C0392B 100%);
+            color: #fff;
+            border-radius: 15px 15px 0 15px;
+            padding: 10px 15px;
+            max-width: 85%;
+            word-break: break-word;
+            font-size: 0.9rem;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        }
+
+        .chatbot-option-btn {
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background-color: rgba(0, 0, 0, 0.3);
+            color: #fff;
+            padding: 8px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            transition: all 0.2s ease;
+            margin-bottom: 5px;
+            text-align: left;
+        }
+
+        .chatbot-option-btn:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.4);
+        }
+
+        #chatbot-input-area {
+            max-height: 180px;
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+        }
+
+        #chatbot-input-area::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        #chatbot-input-area::-webkit-scrollbar-thumb {
+            background-color: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+        }
+    </style>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer-glass mt-auto py-4">
+        <div class="container text-center">
+            <p class="mb-1 text-muted small">
+                <i class="bi bi-scissors me-1"></i>
+                Cabeleleila Leila
+            </p>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Choices.js JS -->
+    <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
+    <!-- App JS -->
+    <script src="/static/js/app.js?v=1.1"></script>
+    <script src="/static/js/chatbot.js"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    {% block extra_js %}{% endblock %}
+</body>
+
+</html>

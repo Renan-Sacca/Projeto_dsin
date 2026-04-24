@@ -1,0 +1,38 @@
+services:
+  web:
+    build: .
+    container_name: cabeleleila-leila
+    restart: unless-stopped
+
+    volumes:
+      - .:/app
+      - sqlite_data:/app/data
+
+    env_file:
+      - .env
+
+    environment:
+      - PYTHONUNBUFFERED=1
+
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+    labels:
+      - "traefik.enable=true"
+
+      - "traefik.http.routers.leila.rule=Host(`leila.financepowder.cloud`)"
+      - "traefik.http.routers.leila.entrypoints=websecure"
+      - "traefik.http.routers.leila.tls.certresolver=letsencrypt"
+
+      - "traefik.http.services.leila.loadbalancer.server.port=8000"
+      - "traefik.docker.network=proxy"
+
+    networks:
+      - proxy
+
+volumes:
+  sqlite_data:
+    driver: local
+
+networks:
+  proxy:
+    external: true

@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+{% block title %}Meu Painel — Cabeleleila Leila{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col">
+            <h1 class="h2 fw-bold">
+                <span class="gradient-text">Olá, </span>
+                <span id="clientName" class="gradient-text">Cliente</span> 👋
+            </h1>
+            <p class="text-muted">Bem-vindo(a) ao seu painel de agendamentos</p>
+        </div>
+        <div class="col-auto d-flex align-items-center">
+            <a href="/client/new-appointment" class="btn btn-primary-gradient">
+                <i class="bi bi-plus-circle me-2"></i>Novo Agendamento
+            </a>
+        </div>
+    </div>
+
+    <!-- Cards de resumo -->
+    <div class="row g-3 mb-4" id="clientStats">
+        <div class="col-6 col-md-3">
+            <div class="card card-glass card-stat animate-fade-in">
+                <div class="card-body text-center">
+                    <div class="stat-icon bg-warning-subtle text-warning mb-2">
+                        <i class="bi bi-clock-history"></i>
+                    </div>
+                    <h3 class="fw-bold mb-0" id="statPending">0</h3>
+                    <small class="text-muted">Pendentes</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card card-glass card-stat animate-fade-in" style="animation-delay: .1s">
+                <div class="card-body text-center">
+                    <div class="stat-icon bg-success-subtle text-success mb-2">
+                        <i class="bi bi-check-circle"></i>
+                    </div>
+                    <h3 class="fw-bold mb-0" id="statApproved">0</h3>
+                    <small class="text-muted">Aprovados</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card card-glass card-stat animate-fade-in" style="animation-delay: .2s">
+                <div class="card-body text-center">
+                    <div class="stat-icon bg-info-subtle text-info mb-2">
+                        <i class="bi bi-check-all"></i>
+                    </div>
+                    <h3 class="fw-bold mb-0" id="statCompleted">0</h3>
+                    <small class="text-muted">Concluídos</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card card-glass card-stat animate-fade-in" style="animation-delay: .3s">
+                <div class="card-body text-center">
+                    <div class="stat-icon bg-danger-subtle text-danger mb-2">
+                        <i class="bi bi-x-circle"></i>
+                    </div>
+                    <h3 class="fw-bold mb-0" id="statCancelled">0</h3>
+                    <small class="text-muted">Cancelados</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Próximos agendamentos -->
+    <div class="card card-glass animate-fade-in" style="animation-delay: .4s">
+        <div
+            class="card-header bg-transparent border-bottom border-white border-opacity-10 d-flex justify-content-between align-items-center">
+            <h5 class="mb-0 fw-semibold"><i class="bi bi-calendar-check me-2"></i>Meus Agendamentos</h5>
+            <a href="/client/my-appointments" class="btn btn-sm btn-outline-light">Ver todos</a>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-dark table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Data/Hora</th>
+                            <th>Serviços</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="appointmentsList">
+                        <tr>
+                            <td colspan="4" class="text-center text-muted py-4">
+                                <div class="spinner-border spinner-border-sm me-2"></div>
+                                Carregando...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        requireAuth('CLIENT');
+        const user = getUser();
+        if (user) {
+            document.getElementById('clientName').textContent = user.nome.split(' ')[0];
+        }
+        loadClientDashboard();
+    });
+
+    async function loadClientDashboard() {
+        try {
+            const data = await apiGet('/api/appointments?limit=10');
+            const appointments = data.items || [];
+
+            // Contadores
+            const counts = { PENDING: 0, APPROVED: 0, COMPLETED: 0, CANCELLED: 0, REJECTED: 0 };
+            appointments.forEach(a => { if (counts[a.status] !== undefined) counts[a.status]++; });
+            document.getElementById('statPending').textContent = counts.PENDING;
+            document.getElementById('statApproved').textContent = counts.APPROVED;
+            document.getElementById('statCompleted').textContent = counts.COMPLETED;
+            document.getElementById('statCancelled').textContent = counts.CANCELLED + counts.REJECTED;
+
+            // Tabela
+            const tbody = document.getElementById('appointmentsList');
+            if (appointments.length === 0) {
+                tbody.innerHTML = `
+                <tr><td colspan="4" class="text-center text-muted py-4">
+                    <i class="bi bi-calendar-x fs-1 d-block mb-2 opacity-50"></i>
+                    Nenhum agendamento ainda.
+                    <a href="/client/new-appointment" class="d-block mt-2 gradient-text">Agendar agora →</a>
+                </td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = appointments.slice(0, 5).map(a => `
+            <tr>
+                <td>
+                    <div class="fw-semibold">${formatDate(a.data_hora)}</div>
+                    <small class="text-muted">${formatTime(a.data_hora)}</small>
+                </td>
+                <td>
+                    ${a.services.map(s => `<span class="badge bg-primary-subtle text-primary-emphasis me-1">${s.service ? s.service.nome : 'Serviço'}</span>`).join('')}
+                </td>
+                <td>${statusBadge(a.status)}</td>
+                <td>
+                    ${(() => {
+                    if (!['PENDING', 'APPROVED'].includes(a.status)) return '—';
+                    const apptDate = new Date(a.data_hora);
+                    const now = new Date();
+                    const diffDays = (apptDate - now) / (1000 * 60 * 60 * 24);
+                    if (diffDays < 2) {
+                        const encodedMsg = encodeURIComponent(`Olá, gostaria de falar sobre meu agendamento para o dia ${formatDate(a.data_hora)} às ${formatTime(a.data_hora)}.`);
+                        return `
+                            <div class="d-flex flex-column gap-1">
+                                <span class="badge bg-secondary-subtle text-secondary small" style="font-size: 0.7rem;">Prazo expirado</span>
+                                <a href="https://wa.me/5514998030404?text=${encodedMsg}" 
+                                   target="_blank" class="btn btn-sm btn-success py-0 px-2 fw-bold" style="font-size: 0.7rem;">
+                                    <i class="bi bi-whatsapp"></i> WhatsApp
+                                </a>
+                            </div>
+                        `;
+                    }
+                    return `
+                            <a href="/client/edit-appointment/${a.id}" class="btn btn-sm btn-outline-light me-1" title="Editar">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            <button class="btn btn-sm btn-outline-danger" onclick="cancelAppointment(${a.id})" title="Cancelar">
+                                <i class="bi bi-x-lg"></i>
+                            </button>
+                        `;
+                })()}
+                </td>
+            </tr>
+        `).join('');
+
+        } catch (err) {
+            console.error(err);
+        }
+    }
+
+    async function cancelAppointment(id) {
+        showConfirmModal(
+            'Cancelar Agendamento',
+            'Tem certeza que gostaria de fazer essa ação (cancelar este agendamento)?',
+            async () => {
+                try {
+                    await apiPost(`/api/appointments/${id}/cancel`);
+                    showToast('Agendamento cancelado!', 'success');
+                    loadClientDashboard();
+                } catch (err) {
+                    showToast(err.message, 'danger');
+                }
+            },
+            'btn-danger',
+            'Cancelar Agendamento'
+        );
+    }
+
+
+</script>
+{% endblock %}

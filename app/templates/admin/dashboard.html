@@ -1,0 +1,337 @@
+{% extends "base.html" %}
+{% block title %}Painel Admin — Cabeleleila Leila{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col">
+            <h1 class="h2 fw-bold gradient-text">Dashboard Administrativo</h1>
+            <p class="text-muted">Visão geral do salão Cabeleleila Leila</p>
+        </div>
+    </div>
+
+    <!-- Métricas -->
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-lg-3">
+            <div class="card card-glass card-stat animate-fade-in">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <p class="text-muted small mb-1">Total Agendamentos</p>
+                            <h3 class="fw-bold mb-0" id="mTotal">—</h3>
+                        </div>
+                        <div class="stat-icon bg-primary-subtle text-primary">
+                            <i class="bi bi-calendar-check"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="card card-glass card-stat animate-fade-in" style="animation-delay:.1s">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <p class="text-muted small mb-1">Pendentes</p>
+                            <h3 class="fw-bold mb-0 text-warning" id="mPending">—</h3>
+                        </div>
+                        <div class="stat-icon bg-warning-subtle text-warning">
+                            <i class="bi bi-hourglass-split"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="card card-glass card-stat animate-fade-in" style="animation-delay:.2s">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <p class="text-muted small mb-1">Clientes</p>
+                            <h3 class="fw-bold mb-0" id="mClients">—</h3>
+                        </div>
+                        <div class="stat-icon bg-info-subtle text-info">
+                            <i class="bi bi-people"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="card card-glass card-stat animate-fade-in" style="animation-delay:.3s">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <p class="text-muted small mb-1">Potencial de Receita</p>
+                            <h3 class="fw-bold mb-0 text-success" id="mRevenue">—</h3>
+                        </div>
+                        <div class="stat-icon bg-success-subtle text-success">
+                            <i class="bi bi-currency-dollar"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Segunda linha de métricas -->
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-lg-3">
+            <div class="card card-glass card-stat animate-fade-in" style="animation-delay:.35s">
+                <div class="card-body text-center">
+                    <h4 class="fw-bold text-success mb-0" id="mApproved">—</h4>
+                    <small class="text-muted">Aprovados</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="card card-glass card-stat animate-fade-in" style="animation-delay:.4s">
+                <div class="card-body text-center">
+                    <h4 class="fw-bold text-info mb-0" id="mCompleted">—</h4>
+                    <small class="text-muted">Concluídos</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="card card-glass card-stat animate-fade-in" style="animation-delay:.45s">
+                <div class="card-body text-center">
+                    <h4 class="fw-bold text-danger mb-0" id="mRejected">—</h4>
+                    <small class="text-muted">Rejeitados</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="card card-glass card-stat animate-fade-in" style="animation-delay:.5s">
+                <div class="card-body text-center">
+                    <h4 class="fw-bold mb-0" id="mToday">—</h4>
+                    <small class="text-muted">Hoje</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gráfico de Receita -->
+    <div class="card card-glass animate-fade-in" style="animation-delay:.55s">
+        <div class="card-header bg-transparent border-bottom border-white border-opacity-10 d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+            <h5 class="mb-0 fw-semibold">
+                <i class="bi bi-graph-up-arrow text-success me-2"></i>Receita Estimada vs Paga
+            </h5>
+            
+            <form id="chartFilters" class="d-flex flex-wrap gap-2 align-items-center">
+                <select class="form-select form-select-sm bg-dark text-white border-secondary w-auto" id="filterPeriod">
+                    <option value="monthly">Agrupamento Mensal</option>
+                    <option value="daily">Agrupamento Diário</option>
+                </select>
+
+                <select class="form-select form-select-sm bg-dark text-white border-secondary w-auto" id="filterService">
+                    <option value="">Todos os Serviços</option>
+                </select>
+
+                <select class="form-select form-select-sm bg-dark text-white border-secondary w-auto" id="filterStatus">
+                    <option value="">Todos os Status</option>
+                    <option value="COMPLETED">Somente Concluídos (Paga)</option>
+                    <option value="PENDING">Somente Pendentes</option>
+                    <option value="APPROVED">Somente Aprovados</option>
+                </select>
+
+                <div class="input-group input-group-sm w-auto">
+                    <span class="input-group-text bg-dark text-white border-secondary">De</span>
+                    <input type="date" class="form-control bg-dark text-white border-secondary" id="filterDateFrom">
+                </div>
+                
+                <div class="input-group input-group-sm w-auto">
+                    <span class="input-group-text bg-dark text-white border-secondary">Até</span>
+                    <input type="date" class="form-control bg-dark text-white border-secondary" id="filterDateTo">
+                </div>
+            </form>
+        </div>
+        <div class="card-body">
+            <div style="position: relative; height:400px; width:100%">
+                <canvas id="revenueChart"></canvas>
+            </div>
+            
+            <!-- Resumo no rodapé do gráfico -->
+            <div class="row text-center mt-4">
+                <div class="col-6">
+                    <h5 class="text-warning mb-0" id="chartTotalEstimated">R$ 0,00</h5>
+                    <small class="text-muted">Total Estimado no Filtro</small>
+                </div>
+                <div class="col-6">
+                    <h5 class="text-success mb-0" id="chartTotalPaid">R$ 0,00</h5>
+                    <small class="text-muted">Total Pago no Filtro</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    requireAuth('ADMIN');
+    loadDashboard();
+});
+
+async function loadDashboard() {
+    try {
+        // Métricas
+        const metrics = await apiGet('/api/appointments/metrics');
+        document.getElementById('mTotal').textContent = metrics.total_agendamentos;
+        document.getElementById('mPending').textContent = metrics.pendentes;
+        document.getElementById('mClients').textContent = metrics.total_clientes;
+        document.getElementById('mRevenue').textContent = `R$ ${metrics.receita_estimada.toFixed(2).replace('.', ',')}`;
+        document.getElementById('mApproved').textContent = metrics.aprovados;
+        document.getElementById('mCompleted').textContent = metrics.completados;
+        document.getElementById('mRejected').textContent = metrics.rejeitados;
+        document.getElementById('mToday').textContent = metrics.agendamentos_hoje;
+
+        // Inicializa serviços para o filtro e o Gráfico
+        await loadServicesFilter();
+        await loadChart();
+
+        // Listeners para atualizar o gráfico
+        document.getElementById('filterPeriod').addEventListener('change', loadChart);
+        document.getElementById('filterService').addEventListener('change', loadChart);
+        document.getElementById('filterStatus').addEventListener('change', loadChart);
+        document.getElementById('filterDateFrom').addEventListener('change', loadChart);
+        document.getElementById('filterDateTo').addEventListener('change', loadChart);
+
+    } catch (err) {
+        console.error(err);
+    }
+}
+
+let revenueChartInstance = null;
+
+async function loadServicesFilter() {
+    try {
+        const data = await apiGet('/api/services');
+        const select = document.getElementById('filterService');
+        if (data && data.items) {
+            data.items.forEach(svc => {
+                const opt = document.createElement('option');
+                opt.value = svc.id;
+                opt.textContent = svc.nome;
+                select.appendChild(opt);
+            });
+        }
+    } catch (err) {
+        console.error("Erro ao carregar serviços:", err);
+    }
+}
+
+async function loadChart() {
+    try {
+        const period = document.getElementById('filterPeriod').value;
+        const serviceId = document.getElementById('filterService').value;
+        const status = document.getElementById('filterStatus').value;
+        const dateFrom = document.getElementById('filterDateFrom').value;
+        const dateTo = document.getElementById('filterDateTo').value;
+
+        let url = `/api/appointments/revenue-chart?period=${period}`;
+        if (serviceId) url += `&service_id=${serviceId}`;
+        if (status) url += `&status=${status}`;
+        if (dateFrom) url += `&date_from=${dateFrom}`;
+        if (dateTo) url += `&date_to=${dateTo}`;
+
+        const data = await apiGet(url);
+        
+        // Atualiza totais (inclusive o card superior para bater com o filtro)
+        const totalEstStr = `R$ ${data.total_estimated.toFixed(2).replace('.', ',')}`;
+        document.getElementById('chartTotalEstimated').textContent = totalEstStr;
+        document.getElementById('mRevenue').textContent = totalEstStr; 
+        document.getElementById('chartTotalPaid').textContent = `R$ ${data.total_paid.toFixed(2).replace('.', ',')}`;
+
+        const labels = data.items.map(item => item.label);
+        const estimatedData = data.items.map(item => item.estimated_revenue);
+        const paidData = data.items.map(item => item.paid_revenue);
+
+        if (revenueChartInstance) {
+            revenueChartInstance.destroy();
+        }
+
+        const ctx = document.getElementById('revenueChart').getContext('2d');
+        
+        // Cores vibrantes
+        const estColor = 'rgba(255, 193, 7, 0.8)'; // Warning/Amarelo
+        const estBorder = 'rgba(255, 193, 7, 1)';
+        const paidColor = 'rgba(25, 135, 84, 0.8)'; // Success/Verde
+        const paidBorder = 'rgba(25, 135, 84, 1)';
+
+        revenueChartInstance = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Receita Estimada (Pend/Aprov)',
+                        data: estimatedData,
+                        backgroundColor: estColor,
+                        borderColor: estBorder,
+                        borderWidth: 1,
+                        borderRadius: 4
+                    },
+                    {
+                        label: 'Receita Paga (Concluído)',
+                        data: paidData,
+                        backgroundColor: paidColor,
+                        borderColor: paidBorder,
+                        borderWidth: 1,
+                        borderRadius: 4
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        labels: { color: '#f8f9fa' }
+                    },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false,
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.dataset.label || '';
+                                if (label) {
+                                    label += ': ';
+                                }
+                                if (context.parsed.y !== null) {
+                                    label += new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(context.parsed.y);
+                                }
+                                return label;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        stacked: false,
+                        ticks: { color: '#adb5bd' },
+                        grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                    },
+                    y: {
+                        stacked: false,
+                        ticks: { 
+                            color: '#adb5bd',
+                            callback: function(value) {
+                                return 'R$ ' + value;
+                            }
+                        },
+                        grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                    }
+                }
+            }
+        });
+
+    } catch (err) {
+        console.error("Erro ao carregar o gráfico:", err);
+    }
+}
+</script>
+{% endblock %}

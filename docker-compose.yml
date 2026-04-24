@@ -1,0 +1,18 @@
+services:
+  web:
+    build: .
+    container_name: cabeleleila-leila
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+      - sqlite_data:/app/data
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+
+volumes:
+  sqlite_data:
+    driver: local

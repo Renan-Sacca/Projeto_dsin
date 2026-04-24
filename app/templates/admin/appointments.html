@@ -1,0 +1,563 @@
+{% extends "base.html" %}
+{% block title %}Agendamentos — Admin — Cabeleleila Leila{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Customização Choices.js para Dark Mode e Estilo Glass */
+.choices__inner {
+    background-color: rgba(0, 0, 0, 0.3) !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    border-radius: 0.375rem !important;
+    color: #fff !important;
+    min-height: 38px !important;
+    padding: 4px 10px !important;
+}
+.choices__list--dropdown {
+    background-color: #1a1d20 !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5) !important;
+    z-index: 2000 !important;
+}
+.choices__list--dropdown .choices__item--selectable.is-highlighted {
+    background-color: rgba(var(--bs-primary-rgb), 0.2) !important;
+}
+.choices__item {
+    color: #fff !important;
+    font-size: 0.9rem !important;
+}
+.choices__input {
+    background-color: transparent !important;
+    color: #fff !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+.choices[data-type*="select-one"]::after {
+    border-color: #fff transparent transparent transparent !important;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="mb-4">
+        <a href="/admin/dashboard" class="btn btn-sm btn-outline-light mb-3">
+            <i class="bi bi-arrow-left me-1"></i>Dashboard
+        </a>
+        <div class="d-flex justify-content-between align-items-center">
+            <h1 class="h2 fw-bold gradient-text mb-0">Gerenciar Agendamentos</h1>
+            <button class="btn btn-primary-gradient px-4" data-bs-toggle="modal" data-bs-target="#adminNewAppointmentModal">
+                <i class="bi bi-calendar-plus me-2"></i>Novo Agendamento
+            </button>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card card-glass mb-4">
+        <div class="card-body py-3">
+            <!-- Filtro de Status -->
+            <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+                <span class="text-muted small me-2">Status:</span>
+                <button class="btn btn-sm btn-outline-light active" id="filterBtnAll" onclick="filterAdmin(this, '')">Todos</button>
+                <button class="btn btn-sm btn-outline-warning" onclick="filterAdmin(this, 'PENDING')">Pendentes</button>
+                <button class="btn btn-sm btn-outline-success" onclick="filterAdmin(this, 'APPROVED')">Aprovados</button>
+                <button class="btn btn-sm btn-outline-info" onclick="filterAdmin(this, 'COMPLETED')">Concluídos</button>
+                <button class="btn btn-sm btn-outline-danger" onclick="filterAdmin(this, 'REJECTED')">Rejeitados</button>
+                <button class="btn btn-sm btn-outline-secondary" onclick="filterAdmin(this, 'CANCELLED')">Cancelados</button>
+            </div>
+            <!-- Filtros avançados -->
+            <div class="row g-2 align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label small text-muted mb-1">Data inicial</label>
+                    <input type="date" class="form-control form-control-sm input-glass" id="adminDateFrom" onchange="resetAndLoad()">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small text-muted mb-1">Data final</label>
+                    <input type="date" class="form-control form-control-sm input-glass" id="adminDateTo" onchange="resetAndLoad()">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small text-muted mb-1">Cliente</label>
+                    <select class="form-select form-select-sm input-glass" id="adminClientFilter" onchange="resetAndLoad()">
+                        <option value="">Todos os clientes</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button class="btn btn-sm btn-outline-light w-100" onclick="clearAllFilters()">
+                        <i class="bi bi-x-lg me-1"></i>Limpar filtros
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabela -->
+    <div class="card card-glass">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-dark table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Cliente</th>
+                            <th>Data/Hora</th>
+                            <th>Serviços</th>
+                            <th>Status</th>
+                            <th>Aprovado por</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="adminApptList">
+                        <tr><td colspan="7" class="text-center py-4"><div class="spinner-border spinner-border-sm"></div></td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Paginação -->
+    <div id="adminPagination" class="d-flex justify-content-between align-items-center mt-3" style="display: none !important;"></div>
+</div>
+
+<!-- Modal Novo Agendamento Admin -->
+<div class="modal fade" id="adminNewAppointmentModal" tabindex="-1" aria-labelledby="adminNewAppointmentModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content card-glass border-white border-opacity-10">
+            <div class="modal-header border-bottom border-white border-opacity-10">
+                <h5 class="modal-title fw-bold" id="adminNewAppointmentModalLabel">Lançar Agendamento</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="adminApptForm">
+                    <!-- Seleção de Cliente Existente -->
+                    <div id="clientSelectGroup" class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <label class="form-label small text-muted mb-0">Cliente</label>
+                            <button type="button" class="btn btn-link btn-sm p-0 text-primary text-decoration-none small" onclick="toggleNewClientForm(true)">
+                                <i class="bi bi-person-plus me-1"></i>Novo Cliente
+                            </button>
+                        </div>
+                        <select id="clientSelect" class="form-select bg-dark text-white border-secondary">
+                            <option value="">Selecione o cliente...</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Formulário de Novo Cliente (Integrado) -->
+                    <div id="newClientFields" style="display: none;" class="mb-3 p-3 border border-primary border-opacity-25 rounded bg-primary bg-opacity-10 animate-fade-in">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="mb-0 text-primary fw-bold"><i class="bi bi-person-plus-fill me-2"></i>Novo Cadastro</h6>
+                            <button type="button" class="btn btn-sm btn-outline-light border-0 py-0" onclick="toggleNewClientForm(false)" title="Voltar para seleção">
+                                <i class="bi bi-x-lg"></i>
+                            </button>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label tiny text-primary-emphasis fw-semibold mb-1">NOME COMPLETO</label>
+                            <input type="text" id="newClientName" class="form-control form-control-sm bg-dark text-white border-primary border-opacity-25" placeholder="Ex: Maria Oliveira">
+                        </div>
+                        <div>
+                            <label class="form-label tiny text-primary-emphasis fw-semibold mb-1">EMAIL DE CONTATO</label>
+                            <input type="email" id="newClientEmail" class="form-control form-control-sm bg-dark text-white border-primary border-opacity-25" placeholder="maria@email.com">
+                            <div id="emailCheckFeedback" class="small mt-1" style="display: none;"></div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small text-muted">Serviço</label>
+                        <select id="serviceSelect" class="form-select bg-dark text-white border-secondary" required>
+                            <option value="">Carregando serviços...</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small text-muted">Data</label>
+                        <input type="date" id="apptDate" class="form-control bg-dark text-white border-secondary" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small text-muted">Horário Disponível</label>
+                        <div id="slotsContainer" class="d-flex flex-wrap gap-2">
+                            <p class="text-muted small">Selecione uma data para ver horários...</p>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer border-top border-white border-opacity-10">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                <button type="button" class="btn btn-primary" id="btnSubmitAdminAppt" disabled>Agendar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let adminFilter = '';
+let adminPage = 0;
+const ADMIN_PAGE_SIZE = 15;
+
+document.addEventListener('DOMContentLoaded', () => {
+    requireAuth('ADMIN');
+    loadClientsList();
+    loadAdminAppts();
+
+    // Lógica de Novo Agendamento Admin
+    const adminState = {
+        services: [],
+        clients: [],
+        selectedSlot: null
+    };
+
+    let clientChoices = null;
+
+    async function loadClientsForModal() {
+        const select = document.getElementById('clientSelect');
+        try {
+            const clients = await apiGet('/api/clients?limit=1000');
+            adminState.clients = clients;
+            
+            const options = [
+                { value: '', label: 'Selecione o cliente...', selected: true, disabled: true },
+                ...clients.map(c => ({
+                    value: String(c.id),
+                    label: `${c.user.nome} (${c.user.email})`
+                }))
+            ];
+
+            if (clientChoices) {
+                clientChoices.setChoices(options, 'value', 'label', true);
+            } else {
+                clientChoices = new Choices(select, {
+                    searchPlaceholderValue: 'Digite para procurar...',
+                    noResultsText: 'Nenhum cliente encontrado',
+                    itemSelectText: 'Clique para selecionar',
+                    shouldSort: false,
+                    allowHTML: true
+                });
+                clientChoices.setChoices(options, 'value', 'label', true);
+            }
+        } catch (err) {
+            console.error("Erro ao carregar clientes:", err);
+        }
+    }
+
+    async function loadServices() {
+        try {
+            const data = await apiGet('/api/services?only_active=true');
+            adminState.services = data.items || data;
+            const select = document.getElementById('serviceSelect');
+            select.innerHTML = '<option value="">Selecione o serviço...</option>' + 
+                adminState.services.map(s => `<option value="${s.id}">${s.nome} (R$ ${s.preco})</option>`).join('');
+        } catch (err) {
+            console.error("Erro ao carregar serviços:", err);
+        }
+    }
+
+    async function fetchSlots() {
+        const serviceId = document.getElementById('serviceSelect').value;
+        const date = document.getElementById('apptDate').value;
+        const container = document.getElementById('slotsContainer');
+        
+        if (!serviceId || !date) {
+            container.innerHTML = '<p class="text-muted small">Selecione serviço e data...</p>';
+            return;
+        }
+
+        const service = adminState.services.find(s => s.id == serviceId);
+        container.innerHTML = '<div class="spinner-border spinner-border-sm text-primary"></div>';
+
+        try {
+            const slots = await apiGet(`/api/appointments/available-slots?date=${date}&duration=${service.duracao_minutos}`);
+            const available = slots.filter(s => s.disponivel);
+            
+            if (available.length === 0) {
+                container.innerHTML = '<p class="text-danger small">Sem horários para este dia.</p>';
+                return;
+            }
+
+            container.innerHTML = available.map(s => {
+                const time = new Date(s.data_hora).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+                return `<button type="button" class="btn btn-outline-primary btn-sm slot-btn" onclick="selectAdminSlot(this, '${s.data_hora}')">${time}</button>`;
+            }).join('');
+        } catch (err) {
+            container.innerHTML = '<p class="text-danger small">Erro ao carregar horários.</p>';
+        }
+    }
+
+    window.selectAdminSlot = function(btn, isoString) {
+        document.querySelectorAll('.slot-btn').forEach(b => b.classList.remove('active', 'btn-primary'));
+        btn.classList.add('active', 'btn-primary');
+        adminState.selectedSlot = isoString;
+        document.getElementById('btnSubmitAdminAppt').disabled = false;
+    }
+
+    // Gerencia alternância entre Seleção e Novo Cliente
+    let isCreatingNewClient = false;
+    window.toggleNewClientForm = function(show) {
+        isCreatingNewClient = show;
+        document.getElementById('clientSelectGroup').style.display = show ? 'none' : 'block';
+        document.getElementById('newClientFields').style.display = show ? 'block' : 'none';
+        
+        // Limpa campos ao alternar
+        if (!show) {
+            document.getElementById('newClientName').value = '';
+            document.getElementById('newClientEmail').value = '';
+        } else {
+            if (clientChoices) clientChoices.setChoiceByValue('');
+        }
+    }
+
+    document.getElementById('serviceSelect').addEventListener('change', fetchSlots);
+    document.getElementById('apptDate').addEventListener('change', fetchSlots);
+
+    // Validação de Email em tempo real
+    document.getElementById('newClientEmail').addEventListener('blur', async (e) => {
+        const email = e.target.value;
+        const feedback = document.getElementById('emailCheckFeedback');
+        if (!email || !email.includes('@')) return;
+
+        try {
+            // Verifica se o email já existe na lista carregada ou faz uma busca rápida
+            const exists = adminState.clients.some(c => c.user.email.toLowerCase() === email.toLowerCase());
+            
+            if (exists) {
+                feedback.innerHTML = '<i class="bi bi-exclamation-triangle-fill me-1"></i> Este email já está cadastrado!';
+                feedback.className = 'small mt-1 text-warning animate-shake';
+                feedback.style.display = 'block';
+                e.target.classList.add('border-warning');
+            } else {
+                feedback.style.display = 'none';
+                e.target.classList.remove('border-warning');
+            }
+        } catch (err) {
+            console.error("Erro ao validar email");
+        }
+    });
+
+    document.getElementById('btnSubmitAdminAppt').addEventListener('click', async () => {
+        const clientIdFromChoices = clientChoices ? clientChoices.getValue(true) : null;
+        const serviceId = document.getElementById('serviceSelect').value;
+        const btn = document.getElementById('btnSubmitAdminAppt');
+        
+        if ((!isCreatingNewClient && !clientIdFromChoices) || (isCreatingNewClient && !document.getElementById('newClientName').value) || !serviceId || !adminState.selectedSlot) {
+            showToast('Selecione um cliente ou preencha o novo cadastro!', 'warning');
+            return;
+        }
+
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Processando...';
+
+        try {
+            let clientId = clientIdFromChoices;
+
+            // Se for novo cliente, cria primeiro
+            if (isCreatingNewClient) {
+                const newClient = await apiPost('/api/clients', {
+                    nome: document.getElementById('newClientName').value,
+                    email: document.getElementById('newClientEmail').value,
+                    senha: 'leila' + Math.floor(Math.random() * 1000) // Senha temporária
+                });
+                clientId = newClient.id;
+            }
+
+            // Cria o agendamento
+            await apiPost('/api/appointments', {
+                client_id: parseInt(clientId),
+                service_ids: [parseInt(serviceId)],
+                data_hora: adminState.selectedSlot
+            });
+            
+            showToast('Agendamento realizado com sucesso!', 'success');
+            bootstrap.Modal.getInstance(document.getElementById('adminNewAppointmentModal')).hide();
+            
+            // Limpa e recarrega
+            document.getElementById('adminApptForm').reset();
+            adminState.selectedClientId = null;
+            toggleNewClientForm(false);
+            adminState.selectedSlot = null;
+            adminPage = 0;
+            loadAdminAppts();
+            loadClientsForModal(); // Recarrega lista de clientes caso tenha um novo
+            loadClientsList(); // Recarrega o filtro da página
+            
+        } catch (err) {
+            showToast(err.message, 'danger');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = 'Agendar';
+        }
+    });
+
+    // Init Modal Data
+    const modalEl = document.getElementById('adminNewAppointmentModal');
+    modalEl.addEventListener('show.bs.modal', () => {
+        loadClientsForModal();
+        loadServices();
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('apptDate').setAttribute('min', today);
+    });
+});
+
+async function loadClientsList() {
+    try {
+        const clients = await apiGet('/api/clients?limit=100');
+        const select = document.getElementById('adminClientFilter');
+        clients.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c.id;
+            opt.textContent = c.user ? c.user.nome : `Cliente #${c.id}`;
+            select.appendChild(opt);
+        });
+    } catch (err) {
+        console.error('Erro ao carregar clientes:', err);
+    }
+}
+
+function filterAdmin(btn, status) {
+    document.querySelectorAll('.card-body .btn-outline-light, .card-body .btn-outline-warning, .card-body .btn-outline-success, .card-body .btn-outline-info, .card-body .btn-outline-danger, .card-body .btn-outline-secondary').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    adminFilter = status;
+    adminPage = 0;
+    loadAdminAppts();
+}
+
+function resetAndLoad() {
+    adminPage = 0;
+    loadAdminAppts();
+}
+
+function clearAllFilters() {
+    document.getElementById('adminDateFrom').value = '';
+    document.getElementById('adminDateTo').value = '';
+    document.getElementById('adminClientFilter').value = '';
+    adminFilter = '';
+    adminPage = 0;
+    // Reset status filter buttons
+    document.querySelectorAll('.card-body .btn-outline-light, .card-body .btn-outline-warning, .card-body .btn-outline-success, .card-body .btn-outline-info, .card-body .btn-outline-danger, .card-body .btn-outline-secondary').forEach(b => b.classList.remove('active'));
+    document.getElementById('filterBtnAll').classList.add('active');
+    loadAdminAppts();
+}
+
+function adminGoToPage(page) {
+    adminPage = page;
+    loadAdminAppts();
+}
+
+async function loadAdminAppts() {
+    const tbody = document.getElementById('adminApptList');
+    const pagContainer = document.getElementById('adminPagination');
+    try {
+        const skip = adminPage * ADMIN_PAGE_SIZE;
+        let url = `/api/appointments?limit=${ADMIN_PAGE_SIZE}&skip=${skip}`;
+        if (adminFilter) url += `&status=${adminFilter}`;
+
+        const dateFrom = document.getElementById('adminDateFrom').value;
+        const dateTo = document.getElementById('adminDateTo').value;
+        const clientId = document.getElementById('adminClientFilter').value;
+
+        if (dateFrom) url += `&date_from=${dateFrom}`;
+        if (dateTo) url += `&date_to=${dateTo}`;
+        if (clientId) url += `&client_id=${clientId}`;
+
+        const data = await apiGet(url);
+        const items = data.items || [];
+        const total = data.total || 0;
+        const totalPages = Math.ceil(total / ADMIN_PAGE_SIZE);
+
+        if (items.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">Nenhum agendamento encontrado</td></tr>';
+            pagContainer.style.display = 'none';
+            return;
+        }
+
+        tbody.innerHTML = items.map(a => `
+            <tr>
+                <td><span class="badge bg-dark">#${a.id}</span></td>
+                <td class="fw-semibold">${a.client_nome || '—'}</td>
+                <td>
+                    <div>${formatDate(a.data_hora)}</div>
+                    <small class="text-muted">${formatTime(a.data_hora)}</small>
+                </td>
+                <td>${a.services.map(s => `<span class="badge bg-primary-subtle text-primary-emphasis me-1">${s.service ? s.service.nome : ''}</span>`).join('')}</td>
+                <td>${statusBadge(a.status)}</td>
+                <td>
+                    ${a.approver_nome ? `<small>${a.approver_nome}</small>` : '<small class="text-muted">—</small>'}
+                    ${a.data_aprovacao ? `<br><small class="text-muted">${formatDate(a.data_aprovacao)}</small>` : ''}
+                </td>
+                <td>
+                    <div class="btn-group btn-group-sm">
+                        ${a.status === 'PENDING' ? `
+                            <button class="btn btn-success" onclick="adminApprove(${a.id})" title="Aprovar"><i class="bi bi-check-lg"></i></button>
+                            <button class="btn btn-danger" onclick="adminReject(${a.id})" title="Rejeitar"><i class="bi bi-x-lg"></i></button>
+                        ` : ''}
+                        ${a.status === 'APPROVED' ? `
+                            <button class="btn btn-info" onclick="adminComplete(${a.id})" title="Concluir"><i class="bi bi-check-all"></i></button>
+                            <button class="btn btn-outline-danger" onclick="adminCancel(${a.id})" title="Cancelar"><i class="bi bi-x-circle"></i></button>
+                        ` : ''}
+                    </div>
+                </td>
+            </tr>
+        `).join('');
+
+        // Paginação
+        if (totalPages > 1) {
+            pagContainer.style.display = 'flex';
+            const startItem = skip + 1;
+            const endItem = Math.min(skip + ADMIN_PAGE_SIZE, total);
+
+            let pagesHtml = '';
+            const maxVisiblePages = 5;
+            let startPage = Math.max(0, adminPage - Math.floor(maxVisiblePages / 2));
+            let endPage = Math.min(totalPages, startPage + maxVisiblePages);
+            if (endPage - startPage < maxVisiblePages) startPage = Math.max(0, endPage - maxVisiblePages);
+
+            if (startPage > 0) pagesHtml += `<button class="btn btn-sm btn-outline-light" onclick="adminGoToPage(0)">1</button><span class="text-muted mx-1">…</span>`;
+            for (let p = startPage; p < endPage; p++) {
+                const activeClass = p === adminPage ? 'btn-primary' : 'btn-outline-light';
+                pagesHtml += `<button class="btn btn-sm ${activeClass}" onclick="adminGoToPage(${p})">${p + 1}</button>`;
+            }
+            if (endPage < totalPages) pagesHtml += `<span class="text-muted mx-1">…</span><button class="btn btn-sm btn-outline-light" onclick="adminGoToPage(${totalPages - 1})">${totalPages}</button>`;
+
+            pagContainer.innerHTML = `
+                <span class="text-muted small">Mostrando ${startItem}–${endItem} de ${total}</span>
+                <div class="d-flex gap-1 align-items-center">
+                    <button class="btn btn-sm btn-outline-light" onclick="adminGoToPage(${adminPage - 1})" ${adminPage === 0 ? 'disabled' : ''}>
+                        <i class="bi bi-chevron-left"></i>
+                    </button>
+                    ${pagesHtml}
+                    <button class="btn btn-sm btn-outline-light" onclick="adminGoToPage(${adminPage + 1})" ${adminPage >= totalPages - 1 ? 'disabled' : ''}>
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
+                </div>
+            `;
+        } else {
+            pagContainer.style.display = total > 0 ? 'flex' : 'none';
+            pagContainer.innerHTML = total > 0 ? `<span class="text-muted small">Mostrando ${total} resultado(s)</span><div></div>` : '';
+        }
+
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="7" class="text-danger text-center">${err.message}</td></tr>`;
+    }
+}
+
+async function adminApprove(id) {
+    showConfirmModal('Aprovar', 'Tem certeza que gostaria de fazer essa ação (aprovar agendamento)?', async () => {
+        try { await apiPost(`/api/appointments/${id}/approve`); showToast('Aprovado! ✅', 'success'); loadAdminAppts(); }
+        catch (e) { showToast(e.message, 'danger'); }
+    }, 'btn-success', 'Aprovar');
+}
+async function adminReject(id) {
+    showConfirmModal('Rejeitar', 'Tem certeza que gostaria de fazer essa ação (rejeitar agendamento)?', async () => {
+        try { await apiPost(`/api/appointments/${id}/reject`); showToast('Rejeitado', 'warning'); loadAdminAppts(); }
+        catch (e) { showToast(e.message, 'danger'); }
+    }, 'btn-danger', 'Rejeitar');
+}
+async function adminComplete(id) {
+    showConfirmModal('Concluir', 'Tem certeza que gostaria de fazer essa ação (concluir agendamento)?', async () => {
+        try { await apiPost(`/api/appointments/${id}/complete`); showToast('Concluído! 🎉', 'success'); loadAdminAppts(); }
+        catch (e) { showToast(e.message, 'danger'); }
+    }, 'btn-info', 'Concluir');
+}
+async function adminCancel(id) {
+    showConfirmModal('Cancelar', 'Tem certeza que gostaria de fazer essa ação (cancelar agendamento)?', async () => {
+        try { await apiPost(`/api/appointments/${id}/cancel`); showToast('Cancelado', 'warning'); loadAdminAppts(); }
+        catch (e) { showToast(e.message, 'danger'); }
+    }, 'btn-outline-danger', 'Cancelar');
+}
+</script>
+{% endblock %}

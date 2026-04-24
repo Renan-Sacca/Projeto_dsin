@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+{% block title %}Meus Agendamentos — Cabeleleila Leila{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="mb-4">
+        <a href="/client/dashboard" class="btn btn-sm btn-outline-light mb-3">
+            <i class="bi bi-arrow-left me-1"></i>Voltar
+        </a>
+        <h1 class="h2 fw-bold gradient-text">Meus Agendamentos</h1>
+        <p class="text-muted">Histórico completo dos seus agendamentos</p>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card card-glass mb-4">
+        <div class="card-body py-3">
+            <!-- Filtro de Status -->
+            <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+                <span class="text-muted small me-2">Status:</span>
+                <button class="btn btn-sm btn-outline-light active" onclick="filterAppts(this, '')">Todos</button>
+                <button class="btn btn-sm btn-outline-warning" onclick="filterAppts(this, 'PENDING')">Pendentes</button>
+                <button class="btn btn-sm btn-outline-success" onclick="filterAppts(this, 'APPROVED')">Aprovados</button>
+                <button class="btn btn-sm btn-outline-info" onclick="filterAppts(this, 'COMPLETED')">Concluídos</button>
+                <button class="btn btn-sm btn-outline-danger" onclick="filterAppts(this, 'REJECTED')">Rejeitados</button>
+                <button class="btn btn-sm btn-outline-secondary" onclick="filterAppts(this, 'CANCELLED')">Cancelados</button>
+            </div>
+            <!-- Filtro de Data -->
+            <div class="row g-2 align-items-end">
+                <div class="col-auto">
+                    <label class="form-label small text-muted mb-1">Data inicial</label>
+                    <input type="date" class="form-control form-control-sm input-glass" id="filterDateFrom" onchange="resetPageAndLoad()">
+                </div>
+                <div class="col-auto">
+                    <label class="form-label small text-muted mb-1">Data final</label>
+                    <input type="date" class="form-control form-control-sm input-glass" id="filterDateTo" onchange="resetPageAndLoad()">
+                </div>
+                <div class="col-auto">
+                    <button class="btn btn-sm btn-outline-light" onclick="clearDateFilters()">
+                        <i class="bi bi-x-lg me-1"></i>Limpar datas
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lista -->
+    <div id="appointmentsContainer">
+        <div class="text-center text-muted py-5">
+            <div class="spinner-border spinner-border-sm me-2"></div>Carregando...
+        </div>
+    </div>
+
+    <!-- Paginação -->
+    <div id="paginationContainer" class="d-flex justify-content-between align-items-center mt-3" style="display: none !important;"></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentFilter = '';
+let currentPage = 0;
+const PAGE_SIZE = 10;
+
+document.addEventListener('DOMContentLoaded', () => {
+    requireAuth('CLIENT');
+    loadMyAppointments();
+});
+
+function filterAppts(btn, status) {
+    document.querySelectorAll('.card-body .btn-outline-light, .card-body .btn-outline-warning, .card-body .btn-outline-success, .card-body .btn-outline-info, .card-body .btn-outline-danger, .card-body .btn-outline-secondary').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentFilter = status;
+    currentPage = 0;
+    loadMyAppointments();
+}
+
+function resetPageAndLoad() {
+    currentPage = 0;
+    loadMyAppointments();
+}
+
+function clearDateFilters() {
+    document.getElementById('filterDateFrom').value = '';
+    document.getElementById('filterDateTo').value = '';
+    resetPageAndLoad();
+}
+
+function goToPage(page) {
+    currentPage = page;
+    loadMyAppointments();
+}
+
+async function loadMyAppointments() {
+    const container = document.getElementById('appointmentsContainer');
+    const pagContainer = document.getElementById('paginationContainer');
+    try {
+        const skip = currentPage * PAGE_SIZE;
+        let url = `/api/appointments?limit=${PAGE_SIZE}&skip=${skip}`;
+        if (currentFilter) url += `&status=${currentFilter}`;
+
+        const dateFrom = document.getElementById('filterDateFrom').value;
+        const dateTo = document.getElementById('filterDateTo').value;
+        if (dateFrom) url += `&date_from=${dateFrom}`;
+        if (dateTo) url += `&date_to=${dateTo}`;
+
+        const data = await apiGet(url);
+        const appointments = data.items || [];
+        const total = data.total || 0;
+        const totalPages = Math.ceil(total / PAGE_SIZE);
+
+        if (appointments.length === 0) {
+            container.innerHTML = `
+                <div class="card card-glass text-center py-5">
+                    <i class="bi bi-calendar-x fs-1 opacity-50"></i>
+                    <p class="text-muted mt-2">Nenhum agendamento encontrado</p>
+                </div>`;
+            pagContainer.style.display = 'none';
+            return;
+        }
+
+        container.innerHTML = appointments.map((a, i) => `
+            <div class="card card-glass mb-3 animate-fade-in" style="animation-delay: ${i * 0.03}s">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-3">
+                            <div class="fw-bold">${formatDate(a.data_hora)}</div>
+                            <div class="text-muted">${formatTime(a.data_hora)}</div>
+                        </div>
+                        <div class="col-md-4">
+                            ${a.services.map(s => `<span class="badge bg-primary-subtle text-primary-emphasis me-1 mb-1">${s.service ? s.service.nome : 'Serviço'}</span>`).join('')}
+                        </div>
+                        <div class="col-md-2">
+                            ${statusBadge(a.status)}
+                        </div>
+                        <div class="col-md-3 text-end">
+                            ${(() => {
+                                if (!['PENDING','APPROVED'].includes(a.status)) return '';
+                                const apptDate = new Date(a.data_hora);
+                                const now = new Date();
+                                const diffMs = apptDate - now;
+                                const diffDays = diffMs / (1000 * 60 * 60 * 24);
+                                if (diffDays < 2) {
+                                    const encodedMsg = encodeURIComponent(`Olá, gostaria de falar sobre meu agendamento para o dia ${formatDate(a.data_hora)} às ${formatTime(a.data_hora)}.`);
+                                    return `
+                                        <div class="d-flex flex-column align-items-end gap-2">
+                                            <span class="badge bg-secondary-subtle text-secondary small py-2 px-3">Prazo de edição expirado</span>
+                                            <a href="https://wa.me/5514998030404?text=${encodedMsg}" 
+                                               target="_blank" class="btn btn-sm btn-success-gradient fw-bold">
+                                                <i class="bi bi-whatsapp me-1"></i>Falar no WhatsApp
+                                            </a>
+                                        </div>
+                                    `;
+                                }
+                                return `
+                                    <a href="/client/edit-appointment/${a.id}" class="btn btn-sm btn-outline-light me-1">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+                                    <button class="btn btn-sm btn-outline-danger" onclick="cancelMyAppt(${a.id})">
+                                        <i class="bi bi-x-lg"></i> Cancelar
+                                    </button>
+                                `;
+                            })()}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+
+        // Paginação
+        if (totalPages > 1) {
+            pagContainer.style.display = 'flex';
+            const startItem = skip + 1;
+            const endItem = Math.min(skip + PAGE_SIZE, total);
+
+            let pagesHtml = '';
+            for (let p = 0; p < totalPages; p++) {
+                const activeClass = p === currentPage ? 'btn-primary' : 'btn-outline-light';
+                pagesHtml += `<button class="btn btn-sm ${activeClass}" onclick="goToPage(${p})">${p + 1}</button>`;
+            }
+
+            pagContainer.innerHTML = `
+                <span class="text-muted small">Mostrando ${startItem}–${endItem} de ${total}</span>
+                <div class="d-flex gap-1">
+                    <button class="btn btn-sm btn-outline-light" onclick="goToPage(${currentPage - 1})" ${currentPage === 0 ? 'disabled' : ''}>
+                        <i class="bi bi-chevron-left"></i>
+                    </button>
+                    ${pagesHtml}
+                    <button class="btn btn-sm btn-outline-light" onclick="goToPage(${currentPage + 1})" ${currentPage >= totalPages - 1 ? 'disabled' : ''}>
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
+                </div>
+            `;
+        } else {
+            pagContainer.style.display = total > 0 ? 'flex' : 'none';
+            pagContainer.innerHTML = total > 0 ? `<span class="text-muted small">Mostrando ${total} resultado(s)</span><div></div>` : '';
+        }
+
+    } catch (err) {
+        container.innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
+    }
+}
+
+async function cancelMyAppt(id) {
+    showConfirmModal('Cancelar Agendamento', 'Tem certeza que gostaria de fazer essa ação (cancelar este agendamento)?', async () => {
+        try {
+            await apiPost(`/api/appointments/${id}/cancel`);
+            showToast('Agendamento cancelado!', 'success');
+            loadMyAppointments();
+        } catch (err) {
+            showToast(err.message, 'danger');
+        }
+    }, 'btn-danger', 'Cancelar Agendamento');
+}
+</script>
+{% endblock %}

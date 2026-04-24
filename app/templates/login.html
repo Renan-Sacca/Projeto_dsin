@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}Login — Cabeleleila Leila{% endblock %}
+
+{% block content %}
+<div class="auth-container">
+    <div class="container">
+        <div class="row justify-content-center align-items-center min-vh-100">
+            <div class="col-md-5 col-lg-4">
+                <div class="card card-glass auth-card animate-fade-in">
+                    <div class="card-body p-4 p-md-5">
+                        <!-- Logo -->
+                        <div class="text-center mb-4">
+                            <div class="auth-icon-wrap mb-3">
+                                <i class="bi bi-scissors"></i>
+                            </div>
+                            <h1 class="h3 fw-bold gradient-text">Cabeleleila Leila</h1>
+                            <p class="text-muted small">Entre na sua conta para continuar</p>
+                        </div>
+
+                        <!-- Formulário -->
+                        <form id="loginForm" novalidate>
+                            <div class="form-floating mb-3">
+                                <input type="email" class="form-control input-glass" id="loginEmail"
+                                       placeholder="email@exemplo.com" required>
+                                <label for="loginEmail"><i class="bi bi-envelope me-1"></i>Email</label>
+                            </div>
+
+                            <div class="form-floating mb-2">
+                                <input type="password" class="form-control input-glass" id="loginPassword"
+                                       placeholder="Senha" required>
+                                <label for="loginPassword"><i class="bi bi-lock me-1"></i>Senha</label>
+                            </div>
+                            <div class="text-end mb-4">
+                                <a href="/forgot-password" class="text-decoration-none small text-muted hover-primary">Esqueci minha senha</a>
+                            </div>
+
+                            <div id="loginError" class="alert alert-danger d-none small py-2"></div>
+
+                            <button type="submit" class="btn btn-primary-gradient w-100 btn-lg mb-3" id="loginBtn">
+                                <span class="btn-text">Entrar</span>
+                                <span class="spinner-border spinner-border-sm d-none" role="status"></span>
+                            </button>
+                            
+                            <div class="d-flex align-items-center mb-3">
+                                <hr class="flex-grow-1 border-secondary">
+                                <span class="mx-2 text-muted small">ou</span>
+                                <hr class="flex-grow-1 border-secondary">
+                            </div>
+
+                            <a href="/api/auth/google/login" class="btn btn-outline-light w-100 mb-3">
+                                <i class="bi bi-google me-2"></i>Entrar com Google
+                            </a>
+                        </form>
+
+                        <div class="text-center">
+                            <p class="text-muted small mb-0">
+                                Não tem conta?
+                                <a href="/register" class="text-decoration-none gradient-text fw-semibold">
+                                    Cadastre-se
+                                </a>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('loginBtn');
+    const errorDiv = document.getElementById('loginError');
+    errorDiv.classList.add('d-none');
+
+    btn.querySelector('.btn-text').textContent = 'Entrando...';
+    btn.querySelector('.spinner-border').classList.remove('d-none');
+    btn.disabled = true;
+
+    try {
+        const res = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email: document.getElementById('loginEmail').value,
+                senha: document.getElementById('loginPassword').value
+            })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+            throw new Error(data.detail || 'Erro ao fazer login');
+        }
+
+        // Salva o token e dados do usuário
+        localStorage.setItem('access_token', data.access_token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+
+        // Seta cookie para o servidor
+        document.cookie = `access_token=${data.access_token}; path=/; max-age=3600`;
+
+        // Redireciona baseado no tipo
+        if (data.user.tipo === 'ADMIN') {
+            window.location.href = '/admin/dashboard';
+        } else {
+            window.location.href = '/client/dashboard';
+        }
+    } catch (err) {
+        errorDiv.textContent = err.message;
+        errorDiv.classList.remove('d-none');
+    } finally {
+        btn.querySelector('.btn-text').textContent = 'Entrar';
+        btn.querySelector('.spinner-border').classList.add('d-none');
+        btn.disabled = false;
+    }
+});
+</script>
+{% endblock %}

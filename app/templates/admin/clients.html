@@ -1,0 +1,272 @@
+{% extends "base.html" %}
+{% block title %}Clientes — Admin — Cabeleleila Leila{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="mb-4">
+        <a href="/admin/dashboard" class="btn btn-sm btn-outline-light mb-3">
+            <i class="bi bi-arrow-left me-1"></i>Dashboard
+        </a>
+        <h1 class="h2 fw-bold gradient-text">Gerenciar Clientes</h1>
+    </div>
+
+    <!-- Filtro de Busca -->
+    <div class="card card-glass mb-4">
+        <div class="card-body py-3">
+            <div class="row g-3 align-items-center">
+                <div class="col-md-5">
+                    <div class="input-group">
+                        <span class="input-group-text bg-transparent border-white border-opacity-10 text-muted">
+                            <i class="bi bi-search"></i>
+                        </span>
+                        <input type="text" class="form-control input-glass" id="clientSearch" 
+                               placeholder="Buscar por nome ou email..." oninput="handleSearch()">
+                    </div>
+                </div>
+                <div class="col-md-7 text-md-end">
+                    <span class="text-muted small" id="totalClientsLabel">Carregando total...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card card-glass">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-dark table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Nome</th>
+                            <th>Email</th>
+                            <th>Telefone</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="clientsList">
+                        <tr><td colspan="6" class="text-center py-4"><div class="spinner-border spinner-border-sm"></div></td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Paginação -->
+    <div id="paginationContainer" class="d-flex justify-content-between align-items-center mt-3"></div>
+</div>
+
+<!-- Modal Editar Cliente -->
+<div class="modal fade" id="editClientModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content bg-dark border-secondary">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title gradient-text">Editar Cliente</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editClientId">
+                <div class="mb-3">
+                    <label class="form-label">Nome</label>
+                    <input type="text" class="form-control input-glass" id="editClientName">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Email</label>
+                    <input type="email" class="form-control input-glass" id="editClientEmail">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Telefone</label>
+                    <input type="text" class="form-control input-glass" id="editClientPhone">
+                </div>
+            </div>
+            <div class="modal-footer border-secondary">
+                <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary-gradient" onclick="saveClient()">Salvar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentSearch = '';
+let currentPage = 0;
+const PAGE_SIZE = 10;
+
+document.addEventListener('DOMContentLoaded', () => {
+    requireAuth('ADMIN');
+    loadClients();
+});
+
+let searchTimeout;
+function handleSearch() {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+        currentSearch = document.getElementById('clientSearch').value;
+        currentPage = 0;
+        loadClients();
+    }, 400);
+}
+
+function goToPage(page) {
+    currentPage = page;
+    loadClients();
+}
+
+async function loadClients() {
+    const tbody = document.getElementById('clientsList');
+    const pagContainer = document.getElementById('paginationContainer');
+    const totalLabel = document.getElementById('totalClientsLabel');
+    
+    try {
+        const skip = currentPage * PAGE_SIZE;
+        let url = `/api/clients?limit=${PAGE_SIZE}&skip=${skip}`;
+        if (currentSearch) url += `&search=${encodeURIComponent(currentSearch)}`;
+
+        const data = await apiGet(url);
+        const clients = data.items || [];
+        const total = data.total || 0;
+        const totalPages = Math.ceil(total / PAGE_SIZE);
+
+        totalLabel.textContent = `Total: ${total} cliente(s)`;
+
+        if (clients.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">Nenhum cliente encontrado</td></tr>';
+            pagContainer.innerHTML = '';
+            return;
+        }
+
+        tbody.innerHTML = clients.map(c => `
+            <tr class="animate-fade-in">
+                <td><span class="badge bg-dark border border-white border-opacity-10">#${c.id}</span></td>
+                <td class="fw-semibold">${c.user ? c.user.nome : '—'}</td>
+                <td>${c.user ? c.user.email : '—'}</td>
+                <td>${c.telefone || '—'}</td>
+                <td>
+                    ${c.user && c.user.ativo
+                        ? '<span class="badge bg-success-subtle text-success">Ativo</span>'
+                        : '<span class="badge bg-danger-subtle text-danger">Inativo</span>'}
+                </td>
+                <td>
+                    <button class="btn btn-xs btn-outline-light me-1" onclick="openEditClient(${c.id}, '${c.user ? c.user.nome : ''}', '${c.user ? c.user.email : ''}', '${c.telefone || ''}')">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                    ${c.user && c.user.tipo === 'CLIENT' ? `
+                        <button class="btn btn-xs btn-outline-warning me-1 promote-btn" style="display: none;" onclick="promoteClient(${c.id})" title="Promover a Funcionário">
+                            <i class="bi bi-star"></i>
+                        </button>
+                    ` : `
+                        <button class="btn btn-xs btn-warning me-1 promote-btn" style="display: none;" onclick="demoteClient(${c.id})" title="Remover privilégios de Admin">
+                            <i class="bi bi-star-fill"></i>
+                        </button>
+                    `}
+                    <button class="btn btn-xs ${c.user && c.user.ativo ? 'btn-outline-danger' : 'btn-outline-success'}"
+                            onclick="toggleClientStatus(${c.id}, ${c.user ? !c.user.ativo : true})">
+                        <i class="bi bi-${c.user && c.user.ativo ? 'x-circle' : 'check-circle'}"></i>
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+
+        // Paginação
+        if (totalPages > 1) {
+            let pagesHtml = '';
+            for (let p = 0; p < totalPages; p++) {
+                const activeClass = p === currentPage ? 'btn-primary' : 'btn-outline-light';
+                pagesHtml += `<button class="btn btn-xs ${activeClass}" onclick="goToPage(${p})">${p + 1}</button>`;
+            }
+
+            pagContainer.innerHTML = `
+                <span class="text-muted small">Página ${currentPage + 1} de ${totalPages}</span>
+                <div class="d-flex gap-1">
+                    <button class="btn btn-xs btn-outline-light" onclick="goToPage(${currentPage - 1})" ${currentPage === 0 ? 'disabled' : ''}>
+                        <i class="bi bi-chevron-left"></i>
+                    </button>
+                    ${pagesHtml}
+                    <button class="btn btn-xs btn-outline-light" onclick="goToPage(${currentPage + 1})" ${currentPage >= totalPages - 1 ? 'disabled' : ''}>
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
+                </div>
+            `;
+        } else {
+            pagContainer.innerHTML = '';
+        }
+
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="6" class="text-danger text-center">${err.message}</td></tr>`;
+    } finally {
+        checkSuperAdmin();
+    }
+}
+
+function checkSuperAdmin() {
+    const user = JSON.parse(localStorage.getItem('user'));
+    // O backend já faz a validação rigorosa, aqui é só pro visual
+    // Idealmente o super_admin email deveria vir de uma rota de config
+    // Mas para fins de UI, vamos mostrar os botões se houver permissão
+    const isSuper = user && user.email === 'renangs2222@gmail.com'; // Exemplo baseado no .env
+    document.querySelectorAll('.promote-btn').forEach(btn => btn.style.display = isSuper ? 'inline-block' : 'none');
+}
+
+async function promoteClient(id) {
+    showConfirmModal('Promover Cliente', 'Deseja promover este cliente a Funcionário (Admin)? Ele terá acesso ao painel administrativo.', async () => {
+        try {
+            await apiPost(`/api/clients/${id}/promote`);
+            showToast('Cliente promovido a funcionário!', 'success');
+            loadClients();
+        } catch (err) {
+            showToast(err.message, 'danger');
+        }
+    }, 'btn-warning', 'Promover');
+}
+
+async function demoteClient(id) {
+    showConfirmModal('Remover Privilégios', 'Deseja remover o acesso administrativo deste funcionário?', async () => {
+        try {
+            await apiPost(`/api/clients/${id}/demote`);
+            showToast('Privilégios removidos!', 'warning');
+            loadClients();
+        } catch (err) {
+            showToast(err.message, 'danger');
+        }
+    }, 'btn-danger', 'Remover');
+}
+
+function openEditClient(id, nome, email, telefone) {
+    document.getElementById('editClientId').value = id;
+    document.getElementById('editClientName').value = nome;
+    document.getElementById('editClientEmail').value = email;
+    document.getElementById('editClientPhone').value = telefone;
+    new bootstrap.Modal(document.getElementById('editClientModal')).show();
+}
+
+async function saveClient() {
+    const id = document.getElementById('editClientId').value;
+    try {
+        await apiPut(`/api/clients/${id}`, {
+            nome: document.getElementById('editClientName').value,
+            email: document.getElementById('editClientEmail').value,
+            telefone: document.getElementById('editClientPhone').value
+        });
+        bootstrap.Modal.getInstance(document.getElementById('editClientModal')).hide();
+        showToast('Cliente atualizado!', 'success');
+        loadClients();
+    } catch (err) {
+        showToast(err.message, 'danger');
+    }
+}
+
+async function toggleClientStatus(id, newStatus) {
+    const action = newStatus ? 'ativar' : 'desativar';
+    if (!confirm(`Deseja ${action} este cliente?`)) return;
+    try {
+        await apiPut(`/api/clients/${id}`, { ativo: newStatus });
+        showToast(`Cliente ${newStatus ? 'ativado' : 'desativado'}!`, 'success');
+        loadClients();
+    } catch (err) {
+        showToast(err.message, 'danger');
+    }
+}
+</script>
+{% endblock %}

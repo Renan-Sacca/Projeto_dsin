@@ -1,0 +1,20 @@
+.env
+.env.*
+
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+
+venv/
+.venv/
+
+# Docker
+*.pid
+*.sock
+
+# IDEs
+.vscode/
+.idea/
+

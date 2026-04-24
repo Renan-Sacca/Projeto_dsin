@@ -1,0 +1,368 @@
+{% extends "base.html" %}
+{% block title %}Novo Agendamento — Cabeleleila Leila{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <!-- Header -->
+            <div class="mb-4">
+                <a href="/client/dashboard" class="btn btn-sm btn-outline-light mb-3">
+                    <i class="bi bi-arrow-left me-1"></i>Voltar
+                </a>
+                <h1 class="h2 fw-bold gradient-text">Novo Agendamento</h1>
+                <p class="text-muted">Selecione os serviços e escolha o melhor horário</p>
+            </div>
+
+            <form id="newAppointmentForm">
+                <!-- Serviços -->
+                <div class="card card-glass mb-4 animate-fade-in">
+                    <div class="card-header bg-transparent border-bottom border-white border-opacity-10 d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0 fw-semibold"><i class="bi bi-list-check me-2"></i>Serviços</h5>
+                        <span class="badge bg-primary-subtle text-primary-emphasis" id="selectedCount">0 selecionado(s)</span>
+                    </div>
+                    <div class="card-body">
+                        <!-- Pesquisa de serviços -->
+                        <div class="mb-3">
+                            <div class="input-group">
+                                <span class="input-group-text bg-transparent border-secondary text-muted">
+                                    <i class="bi bi-search"></i>
+                                </span>
+                                <input type="text" class="form-control input-glass" id="serviceSearch"
+                                       placeholder="Buscar serviço por nome..." oninput="filterServices()">
+                            </div>
+                        </div>
+                        <!-- Lista de serviços com scroll -->
+                        <div id="servicesList" class="row g-3" style="max-height: 320px; overflow-y: auto; padding-right: 4px;">
+                            <div class="col-12 text-center text-muted py-3">
+                                <div class="spinner-border spinner-border-sm me-2"></div>Carregando serviços...
+                            </div>
+                        </div>
+                        <div id="noServicesFound" class="text-center text-muted py-3 d-none">
+                            <i class="bi bi-search fs-4 d-block mb-1 opacity-50"></i>
+                            Nenhum serviço encontrado
+                        </div>
+                        <!-- Resumo -->
+                        <div class="mt-3 p-3 rounded-3 bg-white bg-opacity-10">
+                            <div class="d-flex justify-content-between">
+                                <span class="text-muted">Duração total estimada:</span>
+                                <span class="fw-bold" id="totalDuration">0 min</span>
+                            </div>
+                            <div class="d-flex justify-content-between mt-1">
+                                <span class="text-muted">Valor total:</span>
+                                <span class="fw-bold gradient-text" id="totalPrice">R$ 0,00</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Data e Hora -->
+                <div class="card card-glass mb-4 animate-fade-in" style="animation-delay: .1s">
+                    <div class="card-header bg-transparent border-bottom border-white border-opacity-10">
+                        <h5 class="mb-0 fw-semibold"><i class="bi bi-calendar-event me-2"></i>Data e Horário</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label for="appointmentDate" class="form-label">Data</label>
+                                <input type="date" class="form-control input-glass" id="appointmentDate" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Horários disponíveis</label>
+                                <div id="slotsContainer" class="d-flex flex-wrap gap-2">
+                                    <span class="text-muted small">Selecione uma data primeiro</span>
+                                </div>
+                            </div>
+                        </div>
+                        <input type="hidden" id="selectedTime" value="">
+                        
+                        <div class="form-check mt-3 pt-3 border-top border-secondary">
+                            <input class="form-check-input" type="checkbox" id="addToGoogleCalendar">
+                            <label class="form-check-label text-muted" for="addToGoogleCalendar">
+                                <i class="bi bi-google me-1"></i>Adicionar ao meu Google Calendar com alarme (requer login pelo Google)
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Botão -->
+                <div class="d-grid animate-fade-in" style="animation-delay: .2s">
+                    <button type="submit" class="btn btn-primary-gradient btn-lg" id="submitBtn" disabled>
+                        <span class="btn-text"><i class="bi bi-send me-2"></i>Solicitar Agendamento</span>
+                        <span class="spinner-border spinner-border-sm d-none" role="status"></span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let servicesData = [];
+let selectedServices = new Set();
+let selectedSlot = null;
+
+document.addEventListener('DOMContentLoaded', async () => {
+    requireAuth('CLIENT');
+    await loadServices();
+    await loadAppointmentState();
+
+    // Set min date to today
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('appointmentDate').min = today;
+
+    document.getElementById('appointmentDate').addEventListener('change', async (e) => {
+        await loadSlots();
+        if (e.target.value) {
+            await checkWeeklyAppointment(e.target.value);
+        }
+    });
+});
+
+async function checkWeeklyAppointment(date) {
+    try {
+        const existing = await apiGet(`/api/appointments/check-week?date=${date}`);
+        if (existing) {
+            const dataStr = formatDate(existing.data_hora);
+            const horaStr = formatTime(existing.data_hora);
+            showAlertModal(
+                'Sugestão de Combo! ✨',
+                `Vimos que você já tem um horário marcado para <b>${dataStr} às ${horaStr}</b> nesta semana.<br><br>Gostaria de aproveitar a viagem e marcar tudo para o mesmo dia?`
+            );
+        }
+    } catch (err) {
+        console.error("Erro ao verificar semana", err);
+    }
+}
+
+async function loadServices() {
+    try {
+        const response = await apiGet('/api/services?only_active=true&limit=100');
+        servicesData = response.items || response;
+        renderServices(servicesData);
+    } catch (err) {
+        console.error(err);
+    }
+}
+
+function filterServices() {
+    const query = document.getElementById('serviceSearch').value.toLowerCase().trim();
+    const filtered = servicesData.filter(s =>
+        s.nome.toLowerCase().includes(query) ||
+        (s.descricao && s.descricao.toLowerCase().includes(query))
+    );
+    renderServices(filtered);
+}
+
+function renderServices(services) {
+    const container = document.getElementById('servicesList');
+    const noResults = document.getElementById('noServicesFound');
+
+    if (services.length === 0) {
+        container.innerHTML = '';
+        noResults.classList.remove('d-none');
+        return;
+    }
+
+    noResults.classList.add('d-none');
+    container.innerHTML = services.map(s => {
+        const isSelected = selectedServices.has(s.id);
+        return `
+            <div class="col-md-6">
+                <div class="form-check service-card p-3 rounded-3 ${isSelected ? 'service-selected' : ''}" id="serviceCard_${s.id}">
+                    <input class="form-check-input" type="checkbox" id="service_${s.id}"
+                           value="${s.id}" onchange="toggleService(${s.id})" ${isSelected ? 'checked' : ''}>
+                    <label class="form-check-label w-100 cursor-pointer" for="service_${s.id}">
+                        <div class="fw-semibold">${s.nome}</div>
+                        <small class="text-muted d-block">${s.descricao || ''}</small>
+                        <div class="mt-1 d-flex justify-content-between">
+                            <span class="badge bg-info-subtle text-info">${s.duracao_minutos} min</span>
+                            <span class="fw-bold text-success">R$ ${s.preco.toFixed(2)}</span>
+                        </div>
+                    </label>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function toggleService(id) {
+    if (selectedServices.has(id)) {
+        selectedServices.delete(id);
+        const card = document.getElementById(`serviceCard_${id}`);
+        if (card) card.classList.remove('service-selected');
+    } else {
+        selectedServices.add(id);
+        const card = document.getElementById(`serviceCard_${id}`);
+        if (card) card.classList.add('service-selected');
+    }
+    updateTotals();
+    checkFormValid();
+    
+    // Recarrega os horários disponíveis considerando a nova duração se já houver data selecionada
+    if (document.getElementById('appointmentDate').value) {
+        loadSlots();
+    }
+}
+
+function updateTotals() {
+    let duration = 0, price = 0;
+    selectedServices.forEach(id => {
+        const s = servicesData.find(x => x.id === id);
+        if (s) { duration += s.duracao_minutos; price += s.preco; }
+    });
+    document.getElementById('totalDuration').textContent = `${duration} min`;
+    document.getElementById('totalPrice').textContent = `R$ ${price.toFixed(2).replace('.', ',')}`;
+    document.getElementById('selectedCount').textContent = `${selectedServices.size} selecionado(s)`;
+    return duration; // Retorna a duração para usar no loadSlots
+}
+
+async function loadSlots() {
+    const date = document.getElementById('appointmentDate').value;
+    if (!date) return;
+
+    const container = document.getElementById('slotsContainer');
+    container.innerHTML = '<div class="spinner-border spinner-border-sm"></div>';
+
+    try {
+        // Calcula a duração total. Se nenhum serviço selecionado, assume 15 min.
+        let duration = updateTotals();
+        if (duration === 0) duration = 15;
+
+        const slots = await apiGet(`/api/appointments/available-slots?date=${date}&duration=${duration}`);
+        selectedSlot = null;
+        document.getElementById('selectedTime').value = '';
+
+        if (slots.length === 0) {
+            container.innerHTML = '<span class="text-muted small">Nenhum horário disponível</span>';
+            return;
+        }
+
+        container.innerHTML = slots.map(s => {
+            const time = new Date(s.data_hora).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+            const disabled = !s.disponivel ? 'disabled opacity-50' : '';
+            return `
+                <button type="button" class="btn btn-sm btn-outline-light slot-btn ${disabled}"
+                        data-datetime="${s.data_hora}" onclick="selectSlot(this, '${s.data_hora}')"
+                        ${!s.disponivel ? 'disabled' : ''}>
+                    ${time}
+                </button>
+            `;
+        }).join('');
+    } catch (err) {
+        container.innerHTML = '<span class="text-danger small">Erro ao carregar horários</span>';
+    }
+    checkFormValid();
+}
+
+function selectSlot(btn, datetime) {
+    document.querySelectorAll('.slot-btn').forEach(b => b.classList.remove('btn-primary', 'active'));
+    btn.classList.add('btn-primary', 'active');
+    btn.classList.remove('btn-outline-light');
+    selectedSlot = datetime;
+    document.getElementById('selectedTime').value = datetime;
+    checkFormValid();
+}
+
+function checkFormValid() {
+    const btn = document.getElementById('submitBtn');
+    btn.disabled = !(selectedServices.size > 0 && selectedSlot);
+}
+
+// Salva o estado atual do agendamento no sessionStorage
+function saveAppointmentState() {
+    const state = {
+        selectedServices: Array.from(selectedServices),
+        date: document.getElementById('appointmentDate').value,
+        selectedSlot: selectedSlot,
+        addToGoogleCalendar: document.getElementById('addToGoogleCalendar').checked
+    };
+    sessionStorage.setItem('pendingAppointment', JSON.stringify(state));
+}
+
+// Restaura o estado salvo
+async function loadAppointmentState() {
+    const saved = sessionStorage.getItem('pendingAppointment');
+    if (!saved) return;
+
+    try {
+        const state = JSON.parse(saved);
+        sessionStorage.removeItem('pendingAppointment');
+
+        if (state.selectedServices) {
+            state.selectedServices.forEach(id => selectedServices.add(id));
+            renderServices(servicesData); // Re-renderiza para mostrar os selecionados
+            updateTotals();
+        }
+        
+        if (state.date) {
+            document.getElementById('appointmentDate').value = state.date;
+            await loadSlots(); 
+            
+            if (state.selectedSlot) {
+                const btn = document.querySelector(`.slot-btn[data-datetime="${state.selectedSlot}"]`);
+                if (btn) selectSlot(btn, state.selectedSlot);
+            }
+        }
+        
+        if (state.addToGoogleCalendar) {
+            document.getElementById('addToGoogleCalendar').checked = true;
+        }
+        
+        checkFormValid();
+        showToast('Seus dados de agendamento foram restaurados! ✨', 'info');
+    } catch (e) {
+        console.error("Erro ao restaurar agendamento", e);
+    }
+}
+
+// Verificação de permissão Google Calendar
+document.getElementById('addToGoogleCalendar').addEventListener('change', async (e) => {
+    if (e.target.checked) {
+        try {
+            const me = await apiGet('/api/auth/me');
+            if (!me.has_google_calendar) {
+                if (confirm('Para adicionar ao Google Calendar, você precisa conceder permissão. Deseja fazer isso agora? Seus dados atuais serão restaurados automaticamente após o login.')) {
+                    saveAppointmentState();
+                    window.location.href = '/api/auth/google/connect-calendar?state=CLIENT_APPOINTMENT';
+                } else {
+                    e.target.checked = false;
+                }
+            }
+        } catch (err) {
+            e.target.checked = false;
+            showToast('Erro ao verificar status do Google.', 'danger');
+        }
+    }
+});
+
+document.getElementById('newAppointmentForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    showConfirmModal('Confirmar Agendamento', 'Tem certeza que gostaria de fazer essa ação (solicitar este agendamento)?', async () => {
+        const btn = document.getElementById('submitBtn');
+        btn.querySelector('.btn-text').innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Enviando...';
+        btn.querySelector('.spinner-border').classList.remove('d-none');
+        btn.disabled = true;
+
+        try {
+            const data = {
+                data_hora: selectedSlot,
+                service_ids: Array.from(selectedServices),
+                add_to_google_calendar: document.getElementById('addToGoogleCalendar').checked
+            };
+            await apiPost('/api/appointments', data);
+            showToast('Agendamento solicitado com sucesso! ✨', 'success');
+            setTimeout(() => window.location.href = '/client/dashboard', 1500);
+        } catch (err) {
+            showToast(err.message, 'danger');
+            btn.querySelector('.btn-text').innerHTML = '<i class="bi bi-send me-2"></i>Solicitar Agendamento';
+            btn.querySelector('.spinner-border').classList.add('d-none');
+            btn.disabled = false;
+        }
+    }, 'btn-primary-gradient', 'Sim, Solicitar Agendamento');
+});
+</script>
+{% endblock %}

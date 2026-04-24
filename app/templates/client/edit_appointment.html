@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}Editar Agendamento — Cabeleleila Leila{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="mb-4">
+                <a href="/client/my-appointments" class="btn btn-sm btn-outline-light mb-3">
+                    <i class="bi bi-arrow-left me-1"></i>Voltar
+                </a>
+                <h1 class="h2 fw-bold gradient-text">Editar Agendamento #{{ appointment_id }}</h1>
+            </div>
+
+            <form id="editForm">
+                <!-- Data e Hora -->
+                <div class="card card-glass mb-4 animate-fade-in">
+                    <div class="card-header bg-transparent border-bottom border-white border-opacity-10">
+                        <h5 class="mb-0 fw-semibold"><i class="bi bi-calendar-event me-2"></i>Nova Data e Horário</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label for="editDate" class="form-label">Data</label>
+                                <input type="date" class="form-control input-glass" id="editDate">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Horários disponíveis</label>
+                                <div id="editSlotsContainer" class="d-flex flex-wrap gap-2">
+                                    <span class="text-muted small">Selecione uma data</span>
+                                </div>
+                            </div>
+                        </div>
+                        <input type="hidden" id="editSelectedTime" value="">
+                    </div>
+                </div>
+
+                <div class="d-grid">
+                    <button type="submit" class="btn btn-primary-gradient btn-lg" id="editBtn">
+                        <span class="btn-text"><i class="bi bi-check-lg me-2"></i>Salvar Alterações</span>
+                        <span class="spinner-border spinner-border-sm d-none" role="status"></span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const appointmentId = {{ appointment_id }};
+let editSlot = null;
+
+document.addEventListener('DOMContentLoaded', async () => {
+    requireAuth('CLIENT');
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('editDate').min = today;
+    document.getElementById('editDate').addEventListener('change', loadEditSlots);
+
+    // Verifica regra dos 2 dias antes de permitir edição
+    try {
+        const appt = await apiGet(`/api/appointments/${appointmentId}`);
+        const apptDate = new Date(appt.data_hora);
+        const now = new Date();
+        const diffMs = apptDate - now;
+        const diffDays = diffMs / (1000 * 60 * 60 * 24);
+        if (diffDays < 2) {
+            showToast('Não é possível editar agendamentos com menos de 2 dias de antecedência.', 'danger');
+            setTimeout(() => window.location.href = '/client/my-appointments', 2000);
+            return;
+        }
+    } catch (err) {
+        showToast(err.message, 'danger');
+        setTimeout(() => window.location.href = '/client/my-appointments', 2000);
+    }
+});
+
+async function loadEditSlots() {
+    const date = document.getElementById('editDate').value;
+    if (!date) return;
+    const container = document.getElementById('editSlotsContainer');
+    container.innerHTML = '<div class="spinner-border spinner-border-sm"></div>';
+
+    try {
+        const slots = await apiGet(`/api/appointments/available-slots?date=${date}`);
+        editSlot = null;
+        container.innerHTML = slots.map(s => {
+            const time = new Date(s.data_hora).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+            const disabled = !s.disponivel ? 'disabled opacity-50' : '';
+            return `<button type="button" class="btn btn-sm btn-outline-light slot-btn ${disabled}"
+                        onclick="selectEditSlot(this, '${s.data_hora}')" ${!s.disponivel ? 'disabled' : ''}>${time}</button>`;
+        }).join('');
+    } catch (err) {
+        container.innerHTML = '<span class="text-danger small">Erro</span>';
+    }
+}
+
+function selectEditSlot(btn, datetime) {
+    document.querySelectorAll('.slot-btn').forEach(b => { b.classList.remove('btn-primary','active'); b.classList.add('btn-outline-light'); });
+    btn.classList.add('btn-primary','active');
+    btn.classList.remove('btn-outline-light');
+    editSlot = datetime;
+    document.getElementById('editSelectedTime').value = datetime;
+}
+
+document.getElementById('editForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!editSlot) { showToast('Selecione um horário', 'warning'); return; }
+
+    const btn = document.getElementById('editBtn');
+    btn.disabled = true;
+    btn.querySelector('.spinner-border').classList.remove('d-none');
+
+    try {
+        await apiPut(`/api/appointments/${appointmentId}`, { data_hora: editSlot });
+        showToast('Agendamento atualizado!', 'success');
+        setTimeout(() => window.location.href = '/client/my-appointments', 1500);
+    } catch (err) {
+        showToast(err.message, 'danger');
+        btn.disabled = false;
+        btn.querySelector('.spinner-border').classList.add('d-none');
+    }
+});
+</script>
+{% endblock %}
