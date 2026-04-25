@@ -12,11 +12,27 @@
     min-height: 38px !important;
     padding: 4px 10px !important;
 }
+/* Estilo específico para filtros menores */
+.filter-choices .choices__inner {
+    min-height: 31px !important;
+    padding: 2px 8px !important;
+    font-size: 0.875rem !important;
+}
+/* Força o dropdown a ficar sempre no topo de tudo */
 .choices__list--dropdown {
     background-color: #1a1d20 !important;
     border: 1px solid rgba(255, 255, 255, 0.1) !important;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.5) !important;
-    z-index: 2000 !important;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.8) !important;
+    z-index: 9999 !important;
+}
+/* Garante que o card de filtros não corte o dropdown e fique sobre a tabela */
+.card-filters {
+    position: relative;
+    z-index: 1000;
+    overflow: visible !important;
+}
+.card-filters .card-body {
+    overflow: visible !important;
 }
 .choices__list--dropdown .choices__item--selectable.is-highlighted {
     background-color: rgba(var(--bs-primary-rgb), 0.2) !important;
@@ -51,7 +67,7 @@
     </div>
 
     <!-- Filtros -->
-    <div class="card card-glass mb-4">
+    <div class="card card-glass card-filters mb-4">
         <div class="card-body py-3">
             <!-- Filtro de Status -->
             <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
@@ -73,9 +89,9 @@
                     <label class="form-label small text-muted mb-1">Data final</label>
                     <input type="date" class="form-control form-control-sm input-glass" id="adminDateTo" onchange="resetAndLoad()">
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-3 filter-choices">
                     <label class="form-label small text-muted mb-1">Cliente</label>
-                    <select class="form-select form-select-sm input-glass" id="adminClientFilter" onchange="resetAndLoad()">
+                    <select class="form-select form-select-sm" id="adminClientFilter">
                         <option value="">Todos os clientes</option>
                     </select>
                 </div>
@@ -190,6 +206,7 @@
 let adminFilter = '';
 let adminPage = 0;
 const ADMIN_PAGE_SIZE = 15;
+let filterChoices = null; // Global no script
 
 document.addEventListener('DOMContentLoaded', () => {
     requireAuth('ADMIN');
@@ -205,17 +222,40 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let clientChoices = null;
 
+    // Inicializa o filtro de clientes com Choices.js
+    function initFilterChoices() {
+        const select = document.getElementById('adminClientFilter');
+        if (!select) return;
+        
+        filterChoices = new Choices(select, {
+            searchPlaceholderValue: 'Filtrar cliente...',
+            noResultsText: 'Nenhum cliente encontrado',
+            itemSelectText: '',
+            shouldSort: false,
+            allowHTML: true,
+            placeholder: true,
+            placeholderValue: 'Todos os clientes'
+        });
+        
+        select.addEventListener('change', () => {
+            resetAndLoad();
+        });
+    }
+
+    initFilterChoices();
+
     async function loadClientsForModal() {
         const select = document.getElementById('clientSelect');
         try {
-            const clients = await apiGet('/api/clients?limit=1000');
+            const data = await apiGet('/api/clients?limit=1000');
+            const clients = data.items || [];
             adminState.clients = clients;
             
             const options = [
                 { value: '', label: 'Selecione o cliente...', selected: true, disabled: true },
                 ...clients.map(c => ({
                     value: String(c.id),
-                    label: `${c.user.nome} (${c.user.email})`
+                    label: `${c.user ? c.user.nome : 'Cliente #' + c.id} (${c.user ? c.user.email : 'Sem email'})`
                 }))
             ];
 
@@ -395,14 +435,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function loadClientsList() {
     try {
-        const clients = await apiGet('/api/clients?limit=100');
-        const select = document.getElementById('adminClientFilter');
-        clients.forEach(c => {
-            const opt = document.createElement('option');
-            opt.value = c.id;
-            opt.textContent = c.user ? c.user.nome : `Cliente #${c.id}`;
-            select.appendChild(opt);
-        });
+        const data = await apiGet('/api/clients?limit=1000');
+        const clients = data.items || [];
+        
+        const options = [
+            { value: '', label: 'Todos os clientes', selected: true },
+            ...clients.map(c => ({
+                value: String(c.id),
+                label: c.user ? c.user.nome : `Cliente #${c.id}`
+            }))
+        ];
+
+        if (filterChoices) {
+            filterChoices.setChoices(options, 'value', 'label', true);
+        }
     } catch (err) {
         console.error('Erro ao carregar clientes:', err);
     }
@@ -424,7 +470,9 @@ function resetAndLoad() {
 function clearAllFilters() {
     document.getElementById('adminDateFrom').value = '';
     document.getElementById('adminDateTo').value = '';
-    document.getElementById('adminClientFilter').value = '';
+    if (filterChoices) {
+        filterChoices.setChoiceByValue('');
+    }
     adminFilter = '';
     adminPage = 0;
     // Reset status filter buttons

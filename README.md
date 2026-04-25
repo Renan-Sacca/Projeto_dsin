@@ -372,21 +372,21 @@ APPROVED▼         ▼
 
 ---
 
-## ✨ Funcionalidades Adicionadas
+##  Funcionalidades Adicionadas
 
-### 📅 Sugestão Inteligente de Combo Semanal
+###  Sugestão Inteligente de Combo Semanal
 Ao solicitar um novo agendamento, o sistema verifica automaticamente se o cliente já possui outra marcação na mesma semana. Caso positivo, um **Modal de Alerta** sugere que o cliente aproveite a viagem para realizar todos os serviços no mesmo dia, otimizando a agenda do salão e o tempo do cliente.
 
-### 📊 Dashboard Dinâmico e Receita Potencial
+###  Dashboard Dinâmico e Receita Potencial
 O dashboard administrativo agora é totalmente interativo:
 - **Filtros Cruzados:** Filtre por data, serviço ou status e veja o gráfico de receita se atualizarem simultaneamente.
 - **Potencial de Receita:** Uma métrica inteligente que soma agendamentos Pendentes + Aprovados para mostrar quanto o salão pode faturar no período selecionado.
 
-### 🔍 Gestão Avançada de Clientes
+###  Gestão Avançada de Clientes
 - **Busca em Tempo Real:** Localize clientes instantaneamente por nome ou e-mail sem recarregar a página.
 - **Paginação Inteligente:** Interface preparada para grandes volumes de dados, com navegação fluida entre páginas de registros.
 
-### 🌐 Integração Google Calendar
+###  Integração Google Calendar
 - **Sincronização Bidirecional:** Agendamentos aprovados podem ser enviados automaticamente para o Google Calendar do Administrador e do Cliente.
 - **Login Social:** Suporte a OAuth2 para integração segura com contas Google.
 
@@ -410,8 +410,21 @@ docker exec cabeleleila-leila python cleanup_db.py
 ---
 
 
-### Observações:
+### 📌 Observações
 
--- Era ideal ter agendamentos por funcionarios, para ampliar a rede caso o estabelecimento cresça, e possa atender mais de um cliente, porem não ira dar tempo de fazer nessa entrega.
--- As tecnologias utilizadas em sua maioria são as que trabalho hoje no serviço atual.
--- O projeto esta rodando, online e disponível em: https://
+- **Escalabilidade de agendamentos:**  
+  O ideal seria implementar agendamentos por funcionário, permitindo escalar o atendimento conforme o crescimento do estabelecimento (atendendo múltiplos clientes simultaneamente). No entanto, essa funcionalidade não será incluída nesta entrega devido ao prazo.
+
+- **Tecnologias utilizadas:**  
+  As tecnologias utilizadas no projeto refletem, em sua maioria, aquelas que utilizo atualmente no ambiente profissional.
+
+- **Projeto online:**  
+  O projeto está em execução e disponível em:  
+   https://leila.financepowder.cloud/
+
+- **Configuração de ambiente:**  
+  Os arquivos `.env` e `client secrets` do Google serão enviados por e-mail. Para rodar o projeto, basta adicioná-los à base conforme a estrutura do repositório.
+
+- **Execução local com Docker:**  
+  Utilize exclusivamente o arquivo `docker-compose.yml` para rodar o projeto localmente.  
+  O arquivo `docker-compose-vps.yml` é destinado apenas ao ambiente da VPS pessoal.
